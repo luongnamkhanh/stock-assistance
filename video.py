@@ -1,7 +1,7 @@
 """Tao video TikTok 1080x1920 tu dien bien khoi ngoai hom nay.
 
 Pipeline: script (Gemini) -> tach [HOOK]/[THAN]/[KET] -> TTS tung doan (Gemini Leda)
--> render 3 slide (PIL) -> ffmpeg ghep anh + audio + caption -> daily.mp4
+-> timeline 5 canh -> render tung frame 30fps (PIL) pipe vao ffmpeg -> daily.mp4
 
 Chay local (can ffmpeg):
     python video.py          # tao video_out/daily.mp4
@@ -152,7 +152,7 @@ def scene_chart(img, ctx, ts, dur):
     d = ImageDraw.Draw(img)
     d.text((W / 2, 260), "KHỐI NGOẠI 10 PHIÊN (tỷ đồng)",
            font=_font(52), fill=FG, anchor="mm")
-    vals = [r["netVal"] / 1e9 for r in ctx["rows"]]
+    vals = [(r["netVal"] or 0) / 1e9 for r in ctx["rows"]]
     peak = max(abs(v) for v in vals) or 1
     x0, y_mid, bh = 90, 850, 380
     bw = (W - 180) // len(vals)
@@ -313,7 +313,7 @@ def fetch_index():
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         d = json.load(urllib.request.urlopen(req, timeout=15))["data"][0]
-        return {"close": d["close"], "change": d["change"], "pct": d["pctChange"]}
+        return {"close": float(d["close"]), "change": float(d["change"]), "pct": float(d["pctChange"])}
     except Exception:
         return None
 
@@ -337,7 +337,7 @@ def concat_wavs(paths, out):
 def build_ctx(db):
     rows = fetch_foreign_daily("VNINDEX", 10)
     gom, xa = top_mover_rows(db)
-    return {"net_ty": rows[-1]["netVal"] / 1e9, "date": rows[-1]["tradingDate"],
+    return {"net_ty": (rows[-1]["netVal"] or 0) / 1e9, "date": rows[-1]["tradingDate"],
             "index": fetch_index(), "rows": rows,
             "heat": heatmap_rows(db), "gom": gom, "xa": xa}
 
@@ -348,6 +348,7 @@ def make_video(out=None):
     db = sqlite3.connect(DB)
     script = make_script(db).split("\n\n", 1)[-1]  # bo header "🎬 ..."
     parts = split_script(script)
+    ctx = build_ctx(db)
     wavs = []
     for i, text in enumerate(parts):
         wav_f = OUT / f"s{i}.wav"
@@ -358,7 +359,6 @@ def make_video(out=None):
     concat_wavs(wavs, audio)
 
     timeline = build_timeline(*durs)
-    ctx = build_ctx(db)
     karaoke = []
     start = 0.0
     for text, dur in zip(parts, durs):
