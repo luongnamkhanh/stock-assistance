@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 HELP_TEXT = """📖 Lệnh của bot:
 /trend — xu hướng khối ngoại toàn HOSE 10 phiên gần nhất
 /trend MÃ — xu hướng khối ngoại của 1 mã (vd: /trend HPG)
+/brief MÃ — bản tin AI tổng hợp: dòng tiền + định giá + tin tức (~30 giây)
 /watch MÃ — theo dõi mã (ngưỡng alert giảm một nửa)
 /unwatch MÃ — bỏ theo dõi
 /list — xem watchlist (list chung, ai trong group cũng sửa được)
@@ -376,6 +377,14 @@ def poll_commands(db, wait=25):
                     msg = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
             except Exception as e:
                 msg = f"Không lấy được dữ liệu xu hướng ({e})"
+            send_to(cfg["token"], chat_id, msg)
+        elif cmd == "/BRIEF" and arg:
+            send_to(cfg["token"], chat_id, f"⏳ Đang tổng hợp brief {arg}, chờ ~30 giây...")
+            try:
+                from brief import build_brief
+                msg = build_brief(arg)
+            except Exception as e:
+                msg = f"Không tạo được brief cho {arg} ({e})"
             send_to(cfg["token"], chat_id, msg)
         elif cmd in ("/HELP", "/START"):
             send_to(cfg["token"], chat_id, HELP_TEXT)
