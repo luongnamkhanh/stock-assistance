@@ -125,6 +125,117 @@ def draw_caption(img, track, t):
         y += 66
 
 
+def scene_hook(img, ctx, ts, dur):
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    s = ease(ts / 0.4)
+    d.text((W / 2, lerp(300, 380, s)), "KHỐI NGOẠI HÔM NAY",
+           font=_font(64), fill=mix(BG, DIM, s), anchor="mm")
+    d.text((W / 2, 470), ctx["date"], font=_font(44, bold=False), fill=DIM, anchor="mm")
+    if ctx["index"] and ts > 0.3:
+        i = ctx["index"]
+        up = i["change"] >= 0
+        d.text((W / 2, 570),
+               f"VN-Index {i['close']:,.2f}  {'▲' if up else '▼'} "
+               f"{abs(i['change']):,.2f} ({i['pct']:+.2f}%)",
+               font=_font(40, bold=False), fill=GREEN if up else RED, anchor="mm")
+    net = ctx["net_ty"]
+    color = GREEN if net >= 0 else RED
+    d.text((W / 2, 810), f"{net * ease(ts / 1.1):+,.0f}",   # count-up 1.1s
+           font=_font(220), fill=color, anchor="mm")
+    d.text((W / 2, 1000), "TỶ ĐỒNG " + ("MUA RÒNG" if net >= 0 else "BÁN RÒNG"),
+           font=_font(64), fill=color, anchor="mm")
+
+
+def scene_chart(img, ctx, ts, dur):
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 260), "KHỐI NGOẠI 10 PHIÊN (tỷ đồng)",
+           font=_font(52), fill=FG, anchor="mm")
+    vals = [r["netVal"] / 1e9 for r in ctx["rows"]]
+    peak = max(abs(v) for v in vals) or 1
+    x0, y_mid, bh = 90, 850, 380
+    bw = (W - 180) // len(vals)
+    d.line([x0, y_mid, W - 90, y_mid], fill=DIM, width=2)
+    for i, v in enumerate(vals):
+        g = ease((ts - 0.2 - i * 0.06) / 0.35)   # moc dan, so le
+        if g <= 0:
+            continue
+        h = int(abs(v) / peak * bh * g)
+        x = x0 + i * bw
+        last = i == len(vals) - 1
+        color = (GREEN if v >= 0 else RED) if last else mix(BG, GREEN if v >= 0 else RED, 0.75)
+        top = y_mid - h if v >= 0 else y_mid
+        d.rectangle([x + 8, top, x + bw - 8, top + h], fill=color)
+        if last and g >= 1:   # chi label cot hom nay (selective direct label)
+            d.rectangle([x + 8, top, x + bw - 8, top + h], outline=FG, width=3)
+            d.text((x + bw / 2, top - 44 if v >= 0 else top + h + 44),
+                   f"{v:+,.0f}", font=_font(40), fill=FG, anchor="mm")
+        d.text((x + bw / 2, y_mid + bh + 50), ctx["rows"][i]["tradingDate"][8:10],
+               font=_font(30, bold=False), fill=mix(BG, DIM, g), anchor="mm")
+
+
+def scene_heatmap(img, ctx, ts, dur):
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 260), "TOP GIAO DỊCH HÔM NAY", font=_font(52), fill=FG, anchor="mm")
+    cols, gap, x0, y0, th = 4, 12, 70, 380, 180
+    tw = (W - 2 * x0 - (cols - 1) * gap) // cols
+    for i, (sym, pct) in enumerate(ctx["heat"]):
+        g = ease((ts - 0.15 - i * 0.05) / 0.3)
+        if g <= 0:
+            continue
+        r, c = divmod(i, cols)
+        cx = x0 + c * (tw + gap) + tw / 2
+        cy = y0 + r * (th + gap) + th / 2
+        w2, h2 = tw / 2 * lerp(0.85, 1, g), th / 2 * lerp(0.85, 1, g)  # pop-in
+        d.rectangle([cx - w2, cy - h2, cx + w2, cy + h2], fill=heat_color(pct))
+        d.text((cx, cy - 28), sym, font=_font(46), fill=FG, anchor="mm")
+        d.text((cx, cy + 34), f"{'▲' if pct >= 0 else '▼'}{abs(pct):.1f}%",
+               font=_font(34, bold=False), fill=FG, anchor="mm")
+
+
+def scene_movers(img, ctx, ts, dur):
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 240), "KHỐI NGOẠI GOM / XẢ", font=_font(52), fill=FG, anchor="mm")
+    cards = ([("GOM", *r, GREEN) for r in ctx["gom"]]
+             + [("XẢ", *r, RED) for r in ctx["xa"]])
+    y = 340
+    for i, (tag, sym, net, price, pct, color) in enumerate(cards):
+        g = ease((ts - 0.15 - i * 0.12) / 0.3)
+        if g <= 0:
+            y += 160
+            continue
+        x = 90 + int((1 - g) * 500)                 # truot tu phai vao
+        d.rounded_rectangle([x, y, x + W - 180, y + 140], radius=18, fill=(28, 32, 42))
+        d.rectangle([x, y, x + 14, y + 140], fill=color)
+        d.text((x + 50, y + 70), f"{tag} {sym}", font=_font(54), fill=FG, anchor="lm")
+        d.text((x + 470, y + 70), f"{net / 1e9:+,.0f} tỷ", font=_font(48), fill=color, anchor="lm")
+        d.text((x + W - 230, y + 42), f"{price:,.0f}", font=_font(38, bold=False), fill=FG, anchor="rm")
+        d.text((x + W - 230, y + 100), f"{'▲' if pct >= 0 else '▼'}{abs(pct):.1f}%",
+               font=_font(38), fill=color, anchor="rm")
+        y += 160
+
+
+def scene_outro(img, ctx, ts, dur):
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    s1, s2 = ease((ts - 0.1) / 0.35), ease((ts - 0.3) / 0.35)
+    if s1 > 0:
+        d.text((W / 2, 700), "FOLLOW ĐỂ CẬP NHẬT",
+               font=_font(int(lerp(60, 80, s1))), fill=FG, anchor="mm")
+    if s2 > 0:
+        d.text((W / 2, 830), "KHỐI NGOẠI MỖI PHIÊN",
+               font=_font(int(lerp(60, 80, s2))), fill=GREEN, anchor="mm")
+    d.text((W / 2, 1060), "Thông tin tham khảo — không phải khuyến nghị đầu tư",
+           font=_font(36, bold=False), fill=mix(BG, DIM, ease(ts / 0.8)), anchor="mm")
+
+
+SCENES = {"hook": scene_hook, "chart": scene_chart, "heatmap": scene_heatmap,
+          "movers": scene_movers, "outro": scene_outro}
+
+
 @lru_cache(maxsize=None)
 def _font(size, bold=True):
     from PIL import ImageFont
@@ -143,76 +254,6 @@ def _wrap(draw, text, font, max_w):
     if line:
         lines.append(line)
     return lines
-
-
-def _caption(img, text, max_lines=5):
-    from PIL import ImageDraw
-    d = ImageDraw.Draw(img)
-    font = _font(40, bold=False)
-    lines = _wrap(d, text, font, W - 160)
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        lines[-1] += " …"
-    y = H - 140 - len(lines) * 54
-    for ln in lines:
-        w = d.textlength(ln, font=font)
-        d.text(((W - w) / 2, y), ln, font=font, fill=FG)
-        y += 54
-
-
-def slide_hook(net_ty, date, text):
-    from PIL import Image, ImageDraw
-    img = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(img)
-    d.text((W / 2, 380), "KHỐI NGOẠI HÔM NAY", font=_font(64), fill=DIM, anchor="mm")
-    d.text((W / 2, 470), date, font=_font(48, bold=False), fill=DIM, anchor="mm")
-    color = GREEN if net_ty >= 0 else RED
-    d.text((W / 2, 760), f"{net_ty:+,.0f}", font=_font(220), fill=color, anchor="mm")
-    d.text((W / 2, 950), "TỶ ĐỒNG " + ("MUA RÒNG" if net_ty >= 0 else "BÁN RÒNG"),
-           font=_font(66), fill=color, anchor="mm")
-    _caption(img, text)
-    return img
-
-
-def slide_chart(rows, movers, text):
-    from PIL import Image, ImageDraw
-    img = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(img)
-    d.text((W / 2, 200), "10 PHIÊN GẦN NHẤT (tỷ đồng)", font=_font(52), fill=FG, anchor="mm")
-    # bar chart ve tay bang PIL
-    vals = [r["netVal"] / 1e9 for r in rows]
-    peak = max(abs(v) for v in vals) or 1
-    x0, y_mid, bw, bh = 90, 620, (W - 180) // len(vals), 300
-    for i, v in enumerate(vals):
-        h = int(abs(v) / peak * bh)
-        x = x0 + i * bw
-        color = GREEN if v >= 0 else RED
-        top = y_mid - h if v >= 0 else y_mid
-        d.rectangle([x + 8, top, x + bw - 8, top + h], fill=color)
-        d.text((x + bw / 2, y_mid + bh + 40), rows[i]["tradingDate"][8:10],
-               font=_font(30, bold=False), fill=DIM, anchor="mm")
-    d.line([x0, y_mid, W - 90, y_mid], fill=DIM, width=2)
-    # top movers
-    y = 1130
-    for title, items, color in (("GOM", movers[0], GREEN), ("XẢ", movers[1], RED)):
-        d.text((120, y), title, font=_font(46), fill=color)
-        d.text((290, y), "  ".join(f"{s} {v/1e9:+,.0f}" for s, v in items) or "—",
-               font=_font(42, bold=False), fill=FG)
-        y += 85
-    _caption(img, text)
-    return img
-
-
-def slide_outro(text):
-    from PIL import Image, ImageDraw
-    img = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(img)
-    d.text((W / 2, 700), "FOLLOW ĐỂ CẬP NHẬT", font=_font(80), fill=FG, anchor="mm")
-    d.text((W / 2, 820), "KHỐI NGOẠI MỖI PHIÊN", font=_font(80), fill=GREEN, anchor="mm")
-    d.text((W / 2, 1050), "Thông tin tham khảo — không phải khuyến nghị đầu tư",
-           font=_font(36, bold=False), fill=DIM, anchor="mm")
-    _caption(img, text)
-    return img
 
 
 def tts(text, path):
@@ -316,6 +357,48 @@ def send_video(path):
                    check=True, capture_output=True)
 
 
+def render_frame(t, ctx, timeline, karaoke):
+    """1 frame tai thoi diem t: nen + canh (crossfade voi canh truoc) + caption."""
+    from PIL import Image
+    idx = next((i for i, (_, a, b) in enumerate(timeline) if a <= t < b),
+               len(timeline) - 1)
+    name, a, b = timeline[idx]
+    img = draw_bg(t)
+    SCENES[name](img, ctx, t - a, b - a)
+    if idx > 0 and t - a < XFADE:
+        pname, pa, pb = timeline[idx - 1]
+        prev = draw_bg(t)
+        SCENES[pname](prev, ctx, pb - pa, pb - pa)   # canh truoc o trang thai cuoi
+        img = Image.blend(prev, img, ease((t - a) / XFADE))
+    draw_caption(img, karaoke, t)
+    return img
+
+
+def preview():
+    """PNG giua moi canh tu data gia — khong can mang/TTS/ffmpeg."""
+    OUT.mkdir(exist_ok=True)
+    ctx = {
+        "net_ty": -193, "date": "2026-07-16",
+        "index": {"close": 1782.12, "change": -24.51, "pct": -1.36},
+        "rows": [{"tradingDate": f"2026-07-{d:02d}", "netVal": v * 1e9}
+                 for d, v in zip(range(1, 11),
+                                 (120, -80, 200, -350, 90, -60, 150, -500, 300, -193))],
+        "heat": list(zip(
+            "HPG VIC VHM FPT MSN CTG TCB MBB SSI VND HDB STB MWG VNM GAS PNJ DGC VRE BID ACB".split(),
+            (1.2, -2.3, 0.5, 3.1, -0.8, 1.9, -1.2, 0.0, 2.4, -3.5,
+             0.7, -0.3, 1.1, -1.8, 0.9, 2.8, -2.1, 0.4, -0.6, 1.5))),
+        "gom": [("HPG", 120e9, 22300, 1.2), ("FPT", 85e9, 98700, 3.1), ("SSI", 40e9, 31200, 2.4)],
+        "xa": [("VND", -95e9, 15600, -3.5), ("VIC", -70e9, 41800, -2.3), ("DGC", -33e9, 88000, -2.1)],
+    }
+    timeline = build_timeline(4.0, 12.0, 4.0)
+    demo = chunks_with_times(
+        "Đây là caption karaoke chạy thử để xem vị trí vùng an toàn phía dưới", 0, 20)
+    for name, a, b in timeline:
+        f = OUT / f"preview_{name}.png"
+        render_frame((a + b) / 2, ctx, timeline, demo).save(f)
+        print("preview:", f)
+
+
 def selftest():
     assert ease(0) == 0 and ease(1) == 1 and 0 < ease(0.5) < 1
     assert ease(-5) == 0 and ease(5) == 1
@@ -363,6 +446,8 @@ def selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
+    elif "--preview" in sys.argv:
+        preview()
     else:
         path = make_video()
         print("Video:", path)
