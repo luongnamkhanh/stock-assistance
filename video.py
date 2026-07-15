@@ -208,10 +208,34 @@ def split_script(script):
 
 
 def top_mover_rows(db, n=3):
+    """Top mua/ban rong tu snapshot moi nhat -> ([(sym, net, price, pct)], [...])."""
     ts = db.execute("SELECT MAX(ts) FROM snapshots").fetchone()[0]
-    rows = db.execute("SELECT symbol, buy_val - sell_val AS dn FROM snapshots "
-                      "WHERE ts=? AND ABS(dn) > 1e9 ORDER BY dn DESC", (ts,)).fetchall()
-    return [(s, v) for s, v in rows[:n] if v > 0], [(s, v) for s, v in rows[::-1][:n] if v < 0]
+    rows = db.execute(
+        "SELECT symbol, buy_val - sell_val AS dn, price, COALESCE(pct, 0) "
+        "FROM snapshots WHERE ts=? AND ABS(dn) > 1e9 ORDER BY dn DESC", (ts,)).fetchall()
+    gom = [tuple(r) for r in rows[:n] if r[1] > 0]
+    xa = [tuple(r) for r in rows[::-1][:n] if r[1] < 0]
+    return gom, xa
+
+
+def heatmap_rows(db, n=20):
+    """Top n ma theo GTGD ngay, tu snapshot moi nhat -> [(symbol, pct)]."""
+    ts = db.execute("SELECT MAX(ts) FROM snapshots").fetchone()[0]
+    return [tuple(r) for r in db.execute(
+        "SELECT symbol, COALESCE(pct, 0) FROM snapshots WHERE ts=? "
+        "ORDER BY day_value DESC LIMIT ?", (ts, n))]
+
+
+def fetch_index():
+    """Diem VN-Index phien gan nhat tu VNDirect; None neu loi — video van render."""
+    url = ("https://api-finfo.vndirect.com.vn/v4/vnmarket_prices"
+           "?q=code:VNINDEX&size=1&sort=date:desc")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        d = json.load(urllib.request.urlopen(req, timeout=15))["data"][0]
+        return {"close": d["close"], "change": d["change"], "pct": d["pctChange"]}
+    except Exception:
+        return None
 
 
 def make_video(out=None):
@@ -269,6 +293,24 @@ def selftest():
     assert abs(ks[-1][2] - 8.0) < 1e-9
     assert all(a[2] == b[1] for a, b in zip(ks, ks[1:]))
     assert chunks_with_times("", 0, 5) == []
+
+    from collector import SCHEMA
+    db = sqlite3.connect(":memory:")
+    db.executescript(SCHEMA)
+    ts = "2026-01-05T14:00:00+07:00"
+    rows = [  # (symbol, buy, sell, day_value, price, pct)
+        ("AAA", 9e9, 1e9, 300e9, 20000, 2.5),   # net +8 ty
+        ("BBB", 1e9, 6e9, 200e9, 15000, -1.2),  # net -5 ty
+        ("CCC", 2e9, 2.5e9, 100e9, 30000, 0.4), # net -0.5 ty -> duoi nguong movers
+    ]
+    for s, b, sl, dv, p, pc in rows:
+        db.execute("INSERT INTO snapshots VALUES (?,?,?,?,0,0,1e6,?,?,?)",
+                   (ts, s, b, sl, p, dv, pc))
+    heat = heatmap_rows(db, n=2)
+    assert heat == [("AAA", 2.5), ("BBB", -1.2)], heat  # sap theo day_value
+    gom, xa = top_mover_rows(db)
+    assert gom == [("AAA", 8e9, 20000, 2.5)], gom
+    assert xa == [("BBB", -5e9, 15000, -1.2)], xa
     print("selftest OK")
 
 
