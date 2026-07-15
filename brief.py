@@ -29,13 +29,31 @@ RATIO_LABELS = {
 SYSTEM = """Bạn là trợ lý dữ liệu tài chính cho nhà đầu tư cá nhân Việt Nam.
 Nhiệm vụ: tổng hợp dữ liệu được cung cấp thành bản tin ngắn về một cổ phiếu.
 
-Quy tắc bắt buộc:
+Quy tắc nội dung:
 - CHỈ tổng hợp và diễn giải dữ liệu được đưa. Không bịa số liệu.
 - TUYỆT ĐỐI không khuyến nghị mua/bán/nắm giữ, không dự đoán giá mục tiêu.
 - Nếu dữ liệu mâu thuẫn (vd: KN bán nhưng giá tăng), hãy chỉ ra điều đó.
-- Tiếng Việt, văn xuôi tự nhiên, tối đa 220 từ, plain text (không markdown).
-- Cấu trúc: 1 câu tổng quan → dòng tiền khối ngoại → định giá/cơ bản → tin tức đáng chú ý → 1 câu về điều đáng theo dõi nhất.
-- Kết thúc bằng dòng: "⚠️ Thông tin tham khảo, không phải khuyến nghị đầu tư." """
+- Mỗi thông tin lấy từ tin tức PHẢI kèm số trích dẫn [1], [2]... theo đúng số của tin trong dữ liệu.
+- Không nhắc lại tin không dùng đến.
+
+Định dạng bắt buộc (plain text, không markdown, tiếng Việt):
+
+TỔNG QUAN: 1-2 câu nêu bức tranh chính, kể cả mâu thuẫn nếu có.
+
+💰 Giá & dòng tiền khối ngoại
+• 2-4 gạch đầu dòng ngắn, mỗi dòng 1 ý, số liệu cụ thể
+
+📊 Định giá & cơ bản
+• 1-2 gạch đầu dòng (P/E, P/B, ROE, vốn hóa...)
+
+📰 Tin đáng chú ý
+• 1-3 gạch đầu dòng, mỗi tin kèm [n]
+
+👀 Đáng theo dõi: 1 câu duy nhất.
+
+Nguồn: [n] tên báo, ngày — liệt kê đúng các tin đã trích. Thêm dòng cuối: "Số liệu giá/dòng tiền/định giá: VNDirect."
+
+⚠️ Thông tin tham khảo, không phải khuyến nghị đầu tư."""
 
 
 def _get(url):
@@ -63,7 +81,7 @@ def fetch_prices(sym, n=20):
     last, first = rows[-1], rows[0]
     chg = (last["close"] / rows[-6]["close"] - 1) * 100 if len(rows) > 6 else 0
     chg_m = (last["close"] / first["close"] - 1) * 100
-    return (f"Giá đóng cửa {last['date']}: {last['close']:,.2f} (nghìn đồng)\n"
+    return (f"Giá đóng cửa {last['date']}: {last['close']*1000:,.0f} đồng\n"
             f"Thay đổi 1 tuần: {chg:+.1f}% | {len(rows)} phiên gần nhất: {chg_m:+.1f}%")
 
 
@@ -71,7 +89,11 @@ def fetch_news(sym, n=6):
     q = urllib.parse.quote(f'"{sym}" cổ phiếu')
     raw = _get(f"https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi")
     items = ET.fromstring(raw).findall(".//item")[:n]
-    lines = [f"- {it.findtext('title')} ({it.findtext('pubDate', '')[:16]})" for it in items]
+    lines = []
+    for i, it in enumerate(items, 1):
+        src = it.findtext("source") or "?"
+        date = it.findtext("pubDate", "")[5:16]  # "15 Jul 2026"
+        lines.append(f"[{i}] ({src}, {date}) {it.findtext('title')}")
     return "\n".join(lines) or "(không thấy tin tức gần đây)"
 
 
