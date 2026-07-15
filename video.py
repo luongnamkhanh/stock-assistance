@@ -30,6 +30,9 @@ OUT = Path(__file__).parent / "video_out"
 W, H = 1080, 1920
 BG, FG = (15, 17, 21), (240, 240, 245)
 GREEN, RED, DIM = (34, 197, 94), (239, 68, 68), (140, 145, 160)
+BG2 = (26, 31, 46)
+HEAT_NEUTRAL = (44, 49, 60)
+CAPTION_BOTTOM = H - 360
 FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
 FONT_REG = "/System/Library/Fonts/Supplemental/Arial.ttf"
 TTS_STYLE = "Đọc bằng giọng nữ trẻ trung, năng lượng cao, tốc độ nhanh như video TikTok tài chính: "
@@ -84,6 +87,42 @@ def chunks_with_times(text, start, duration, size=5):
         out.append((c, t, t + dt))
         t += dt
     return out
+
+
+def draw_bg(t):
+    """Nen gradient doc troi cham. Ve cot 1x240 roi resize — re va muot."""
+    from PIL import Image
+    col = Image.new("RGB", (1, 240))
+    phase = math.sin(t * 0.25) * 0.2
+    col.putdata([mix(BG, BG2, clamp01(y / 240 + phase)) for y in range(240)])
+    return col.resize((W, H))
+
+
+def heat_color(pct):
+    """Diverging: RED <- xam trung tinh -> GREEN, bao hoa tai ±3%.
+    Cap 0.75 de chu trang tren o van doc duoc."""
+    t = clamp01(abs(pct) / 3) * 0.75
+    return mix(HEAT_NEUTRAL, GREEN if pct >= 0 else RED, t)
+
+
+def draw_caption(img, track, t):
+    """Karaoke: cum dang doc to & sang o vung an toan, cum truoc mo phia tren."""
+    from PIL import ImageDraw
+    idx = next((i for i, (_, a, b) in enumerate(track) if a <= t < b), None)
+    if idx is None:
+        return
+    d = ImageDraw.Draw(img)
+    font = _font(52)
+    lines = _wrap(d, track[idx][0], font, W - 300)[:2]
+    y = CAPTION_BOTTOM - len(lines) * 66
+    if idx > 0:
+        pfont = _font(38, bold=False)
+        prev = _wrap(d, track[idx - 1][0], pfont, W - 300)[0]
+        d.text(((W - d.textlength(prev, font=pfont)) / 2, y - 56), prev,
+               font=pfont, fill=DIM)
+    for ln in lines:
+        d.text(((W - d.textlength(ln, font=font)) / 2, y), ln, font=font, fill=FG)
+        y += 66
 
 
 @lru_cache(maxsize=None)
@@ -311,6 +350,13 @@ def selftest():
     gom, xa = top_mover_rows(db)
     assert gom == [("AAA", 8e9, 20000, 2.5)], gom
     assert xa == [("BBB", -5e9, 15000, -1.2)], xa
+
+    assert heat_color(0) == HEAT_NEUTRAL
+    assert heat_color(9) == heat_color(3.1)          # bao hoa tai ±3%
+    g3, r3 = heat_color(3), heat_color(-3)
+    assert g3[1] > g3[0] and r3[0] > r3[1]           # xanh nghieng G, do nghieng R
+    bg = draw_bg(0.0)
+    assert bg.size == (W, H) and bg.mode == "RGB"
     print("selftest OK")
 
 
