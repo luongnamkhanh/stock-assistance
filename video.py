@@ -10,6 +10,7 @@ Chay local (can ffmpeg):
 
 import base64
 import json
+import math
 import os
 import re
 import sqlite3
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import urllib.request
 import wave
+from functools import lru_cache
 from pathlib import Path
 
 from brief import load_env
@@ -32,7 +34,59 @@ FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
 FONT_REG = "/System/Library/Fonts/Supplemental/Arial.ttf"
 TTS_STYLE = "Đọc bằng giọng nữ trẻ trung, năng lượng cao, tốc độ nhanh như video TikTok tài chính: "
 
+FPS = 30
+XFADE = 0.35            # giay crossfade giua 2 canh
+CHART_CUT, HEAT_CUT = 0.4, 0.7  # ponytail: moc chia THAN, chinh tay sau khi xem ban dau
 
+
+def clamp01(t):
+    return 0.0 if t < 0 else 1.0 if t > 1 else float(t)
+
+
+def ease(t):
+    """Ease-out cubic, tu clamp ve [0,1]."""
+    t = clamp01(t)
+    return 1 - (1 - t) ** 3
+
+
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def mix(c1, c2, t):
+    """Tron 2 mau RGB theo t."""
+    return tuple(int(lerp(a, b, t)) for a, b in zip(c1, c2))
+
+
+def build_timeline(d0, d1, d2):
+    """5 canh tren truc audio lien tuc; d0/d1/d2 = duration 3 doan TTS."""
+    return [
+        ("hook", 0.0, d0),
+        ("chart", d0, d0 + CHART_CUT * d1),
+        ("heatmap", d0 + CHART_CUT * d1, d0 + HEAT_CUT * d1),
+        ("movers", d0 + HEAT_CUT * d1, d0 + d1),
+        ("outro", d0 + d1, d0 + d1 + d2),
+    ]
+
+
+def chunks_with_times(text, start, duration, size=5):
+    """Chia text thanh cum ~size tu, chia duration ty le so ky tu.
+    Tra ve [(cum, t0, t1)] voi thoi gian tuyet doi (cong start)."""
+    words = text.split()
+    if not words:
+        return []
+    chunks = [" ".join(words[i:i + size]) for i in range(0, len(words), size)]
+    weights = [len(c) + 1 for c in chunks]
+    total = sum(weights)
+    out, t = [], start
+    for c, w in zip(chunks, weights):
+        dt = duration * w / total
+        out.append((c, t, t + dt))
+        t += dt
+    return out
+
+
+@lru_cache(maxsize=None)
 def _font(size, bold=True):
     from PIL import ImageFont
     return ImageFont.truetype(FONT_BOLD if bold else FONT_REG, size)
@@ -199,9 +253,31 @@ def send_video(path):
                    check=True, capture_output=True)
 
 
+def selftest():
+    assert ease(0) == 0 and ease(1) == 1 and 0 < ease(0.5) < 1
+    assert ease(-5) == 0 and ease(5) == 1
+    assert mix((0, 0, 0), (100, 200, 50), 0.5) == (50, 100, 25)
+
+    tl = build_timeline(3, 10, 4)
+    assert [s[0] for s in tl] == ["hook", "chart", "heatmap", "movers", "outro"]
+    assert tl[0][1] == 0 and abs(tl[-1][2] - 17) < 1e-9
+    for (_, _, b), (_, c, _) in zip(tl, tl[1:]):
+        assert abs(b - c) < 1e-9  # cac canh lien tuc, khong ho
+
+    ks = chunks_with_times("một hai ba bốn năm sáu bảy tám", 2.0, 6.0, size=3)
+    assert ks[0][0] == "một hai ba" and ks[0][1] == 2.0
+    assert abs(ks[-1][2] - 8.0) < 1e-9
+    assert all(a[2] == b[1] for a, b in zip(ks, ks[1:]))
+    assert chunks_with_times("", 0, 5) == []
+    print("selftest OK")
+
+
 if __name__ == "__main__":
-    path = make_video()
-    print("Video:", path)
-    if "--send" in sys.argv:
-        send_video(path)
-        print("Đã gửi vào Telegram")
+    if "--selftest" in sys.argv:
+        selftest()
+    else:
+        path = make_video()
+        print("Video:", path)
+        if "--send" in sys.argv:
+            send_video(path)
+            print("Đã gửi vào Telegram")
