@@ -9,6 +9,7 @@ Usage: python brief.py HPG   # in brief ra stdout (kiem tra nhanh)
 """
 
 import json
+import os
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -87,19 +88,47 @@ def gather(sym):
     return "\n\n".join(f"### {k}\n{v}" for k, v in sections.items())
 
 
-def build_brief(sym):
-    sym = sym.upper()
-    context = gather(sym)
+def _call_gemini(system, user):
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+    body = json.dumps({
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"parts": [{"text": user}]}],
+    }).encode()
+    req = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        data=body,
+        headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"], "Content-Type": "application/json"})
+    j = json.load(urllib.request.urlopen(req, timeout=120))
+    return "".join(p.get("text", "") for p in j["candidates"][0]["content"]["parts"])
+
+
+def _call_claude(system, user):
     import anthropic  # lazy: collector chay duoc ke ca khi chua cai SDK
-    client = anthropic.Anthropic()
-    resp = client.messages.create(
+    resp = anthropic.Anthropic().messages.create(
         model="claude-opus-4-8",
         max_tokens=16000,
         thinking={"type": "adaptive"},
-        system=SYSTEM,
-        messages=[{"role": "user", "content": f"Dữ liệu về cổ phiếu {sym} hôm nay:\n\n{context}\n\nViết bản tin."}],
+        system=system,
+        messages=[{"role": "user", "content": user}],
     )
-    text = "".join(b.text for b in resp.content if b.type == "text").strip()
+    return "".join(b.text for b in resp.content if b.type == "text")
+
+
+def call_llm(system, user):
+    # uu tien Claude neu co API key rieng; khong thi Gemini (free tier)
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return _call_claude(system, user)
+    if os.environ.get("GEMINI_API_KEY"):
+        return _call_gemini(system, user)
+    if os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        return _call_claude(system, user)
+    raise RuntimeError("Chưa cấu hình LLM key (GEMINI_API_KEY hoặc ANTHROPIC_API_KEY)")
+
+
+def build_brief(sym):
+    sym = sym.upper()
+    context = gather(sym)
+    text = call_llm(SYSTEM, f"Dữ liệu về cổ phiếu {sym} hôm nay:\n\n{context}\n\nViết bản tin.").strip()
     return f"📋 Brief {sym}\n\n{text}"[:4000]  # Telegram cap 4096
 
 
