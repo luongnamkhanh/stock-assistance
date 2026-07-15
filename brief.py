@@ -16,6 +16,19 @@ import xml.etree.ElementTree as ET
 
 from collector import fetch_foreign_daily, format_trend
 
+def load_env():
+    """Nap .env vao os.environ (local dev; tren Railway dung Variables)."""
+    from pathlib import Path
+    f = Path(__file__).parent / ".env"
+    if f.exists():
+        for line in f.read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
+
+load_env()
+
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 VND = "https://api-finfo.vndirect.com.vn/v4"
 RATIO_LABELS = {
