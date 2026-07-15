@@ -124,17 +124,28 @@ def gather(sym):
 
 
 def _call_gemini(system, user):
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+    import time
     body = json.dumps({
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"parts": [{"text": user}]}],
     }).encode()
-    req = urllib.request.Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-        data=body,
-        headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"], "Content-Type": "application/json"})
-    j = json.load(urllib.request.urlopen(req, timeout=120))
-    return "".join(p.get("text", "") for p in j["candidates"][0]["content"]["parts"])
+    last = None
+    # retry + fallback model: free tier hay dinh 503/429 thoang qua
+    for model in (os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"), "gemini-3.1-flash-lite"):
+        for _ in range(2):
+            req = urllib.request.Request(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                data=body,
+                headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"], "Content-Type": "application/json"})
+            try:
+                j = json.load(urllib.request.urlopen(req, timeout=120))
+                return "".join(p.get("text", "") for p in j["candidates"][0]["content"]["parts"])
+            except urllib.error.HTTPError as e:
+                if e.code not in (429, 500, 503):
+                    raise
+                last = e
+                time.sleep(3)
+    raise last
 
 
 def _call_claude(system, user):

@@ -79,6 +79,7 @@ HELP_TEXT = """📖 Lệnh của bot:
 /trend — xu hướng khối ngoại toàn HOSE 10 phiên gần nhất
 /trend MÃ — xu hướng khối ngoại của 1 mã (vd: /trend HPG)
 /brief MÃ — bản tin AI tổng hợp: dòng tiền + định giá + tin tức (~30 giây)
+/script — kịch bản video TikTok từ diễn biến khối ngoại hôm nay
 /watch MÃ — theo dõi mã (ngưỡng alert giảm một nửa)
 /unwatch MÃ — bỏ theo dõi
 /list — xem watchlist (list chung, ai trong group cũng sửa được)
@@ -100,6 +101,18 @@ Cuối mỗi phiên bot tự gửi tổng kết xu hướng khối ngoại toàn
 Mã trong watchlist: mọi ngưỡng trên giảm một nửa.
 
 ⚠️ Thông tin tham khảo, không phải khuyến nghị đầu tư — quyết định là của bạn."""
+
+SCRIPT_SYSTEM = """Bạn là người viết kịch bản video TikTok ngắn (30-40 giây đọc thành tiếng) về chứng khoán Việt Nam.
+Nhiệm vụ: từ dữ liệu giao dịch khối ngoại hôm nay, viết script cho 1 video.
+
+Cấu trúc bắt buộc (plain text):
+[HOOK] 1 câu mở đầu gây chú ý bằng con số ấn tượng nhất của phiên. Không chào hỏi.
+[THÂN] 3-4 câu ngắn: diễn biến chính của khối ngoại, top gom/xả, và điểm bất thường đáng chú ý nhất (chuỗi phiên, đảo chiều...).
+[KẾT] 1 câu mời theo dõi kênh để cập nhật phiên sau.
+Dòng cuối: 4-5 hashtag tiếng Việt.
+
+Quy tắc: giọng nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc thành tiếng, số liệu làm tròn
+cho dễ nghe. KHÔNG khuyến nghị mua/bán. KHÔNG bịa gì ngoài dữ liệu được đưa."""
 
 STATE_MSG = {
     "GOM":       "🟢 {s} vào trạng thái GOM — KN ròng {d:+.1f} tỷ từ đầu phiên, 30' qua {r:+.1f} tỷ",
@@ -378,6 +391,12 @@ def poll_commands(db, wait=25):
             except Exception as e:
                 msg = f"Không lấy được dữ liệu xu hướng ({e})"
             send_to(cfg["token"], chat_id, msg)
+        elif cmd == "/SCRIPT":
+            try:
+                msg = make_script(db)
+            except Exception as e:
+                msg = f"Không tạo được script ({e})"
+            send_to(cfg["token"], chat_id, msg)
         elif cmd == "/BRIEF" and arg:
             send_to(cfg["token"], chat_id, f"⏳ Đang tổng hợp brief {arg}, chờ ~30 giây...")
             try:
@@ -390,6 +409,13 @@ def poll_commands(db, wait=25):
             send_to(cfg["token"], chat_id, HELP_TEXT)
     db.execute("INSERT OR REPLACE INTO meta VALUES ('tg_offset', ?)", (str(offset),))
     db.commit()
+
+
+def make_script(db):
+    data = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
+    from brief import call_llm  # lazy — tranh circular import
+    text = call_llm(SCRIPT_SYSTEM, f"Dữ liệu phiên hôm nay:\n\n{data}\n\nViết script.").strip()
+    return f"🎬 Script TikTok hôm nay:\n\n{text}"[:4000]
 
 
 def maybe_send_summary(db):
@@ -410,6 +436,11 @@ def maybe_send_summary(db):
         db.commit()
     except Exception as e:
         print(f"[{now.isoformat(timespec='seconds')}] summary failed: {e}")
+        return
+    try:
+        send_telegram(make_script(db))
+    except Exception as e:
+        print(f"[{now.isoformat(timespec='seconds')}] script failed: {e}")  # script loi khong chan summary
 
 
 def run_once(db):
