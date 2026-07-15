@@ -370,10 +370,13 @@ def make_video(out=None):
          "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
          "-i", audio, "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
          "-c:a", "aac", "-shortest", str(out)], stdin=subprocess.PIPE)
-    for f in range(int(sum(durs) * FPS)):
-        proc.stdin.write(render_frame(f / FPS, ctx, timeline, karaoke).tobytes())
-    proc.stdin.close()
-    if proc.wait() != 0:
+    try:
+        for f in range(int(sum(durs) * FPS)):
+            proc.stdin.write(render_frame(f / FPS, ctx, timeline, karaoke).tobytes())
+    finally:
+        proc.stdin.close()
+        code = proc.wait()
+    if code != 0:
         raise RuntimeError("ffmpeg failed")
     return out
 
