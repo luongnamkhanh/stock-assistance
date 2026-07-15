@@ -318,33 +318,63 @@ def fetch_index():
         return None
 
 
+def wav_dur(path):
+    with wave.open(str(path)) as w:
+        return w.getnframes() / w.getframerate()
+
+
+def concat_wavs(paths, out):
+    """Noi cac wav cung format (24kHz/mono/16-bit tu Gemini TTS)."""
+    with wave.open(str(paths[0])) as w0:
+        params = w0.getparams()
+    with wave.open(str(out), "wb") as o:
+        o.setparams(params)
+        for p in paths:
+            with wave.open(str(p)) as w:
+                o.writeframes(w.readframes(w.getnframes()))
+
+
+def build_ctx(db):
+    rows = fetch_foreign_daily("VNINDEX", 10)
+    gom, xa = top_mover_rows(db)
+    return {"net_ty": rows[-1]["netVal"] / 1e9, "date": rows[-1]["tradingDate"],
+            "index": fetch_index(), "rows": rows,
+            "heat": heatmap_rows(db), "gom": gom, "xa": xa}
+
+
 def make_video(out=None):
     OUT.mkdir(exist_ok=True)
     out = out or OUT / "daily.mp4"
     db = sqlite3.connect(DB)
     script = make_script(db).split("\n\n", 1)[-1]  # bo header "🎬 ..."
-    hook, than, ket = split_script(script)
-    rows = fetch_foreign_daily("VNINDEX", 10)
-    net_ty = rows[-1]["netVal"] / 1e9
-    date = rows[-1]["tradingDate"]
-    slides = [
-        slide_hook(net_ty, date, hook),
-        slide_chart(rows, top_mover_rows(db), than),
-        slide_outro(ket),
-    ]
-    segs = []
-    for i, (img, text) in enumerate(zip(slides, (hook, than, ket))):
-        png, wav_f, seg = OUT / f"s{i}.png", OUT / f"s{i}.wav", OUT / f"s{i}.mp4"
-        img.save(png)
+    parts = split_script(script)
+    wavs = []
+    for i, text in enumerate(parts):
+        wav_f = OUT / f"s{i}.wav"
         tts(text, wav_f)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", png,
-                        "-i", wav_f, "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac",
-                        "-pix_fmt", "yuv420p", "-shortest", seg], check=True)
-        segs.append(seg)
-    concat = OUT / "list.txt"
-    concat.write_text("".join(f"file '{s.name}'\n" for s in segs))
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
-                    "-i", concat, "-c", "copy", out], check=True, cwd=OUT)
+        wavs.append(wav_f)
+    durs = [wav_dur(p) for p in wavs]
+    audio = OUT / "audio.wav"
+    concat_wavs(wavs, audio)
+
+    timeline = build_timeline(*durs)
+    ctx = build_ctx(db)
+    karaoke = []
+    start = 0.0
+    for text, dur in zip(parts, durs):
+        karaoke += chunks_with_times(text, start, dur)
+        start += dur
+
+    proc = subprocess.Popen(
+        ["ffmpeg", "-y", "-loglevel", "error",
+         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
+         "-i", audio, "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", "-shortest", str(out)], stdin=subprocess.PIPE)
+    for f in range(int(sum(durs) * FPS)):
+        proc.stdin.write(render_frame(f / FPS, ctx, timeline, karaoke).tobytes())
+    proc.stdin.close()
+    if proc.wait() != 0:
+        raise RuntimeError("ffmpeg failed")
     return out
 
 
