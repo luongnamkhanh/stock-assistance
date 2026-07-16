@@ -19,9 +19,12 @@ bước QA — video đăng public, một frame lỗi là lên sóng luôn.
   30fps, audio AAC.
 - Pipeline 3 stage DECOUPLED, chạy `video.py` là idempotent: script/voice đã chốt
   thì dùng lại, chỉ render lại (thuần local, $0) — chỉnh visual/animation lặp thoải
-  mái không đổi content, không tốn API. `--fresh` = chốt lại script + voice (dùng khi
-  data đổi hoặc user chê script). Render xong TỰ GỬI Telegram — đang QA/debug phải
-  chạy `--no-send`.
+  mái không đổi content, không tốn API. `--fresh` = chốt lại plan + voice. Render
+  xong TỰ GỬI Telegram — đang QA/debug phải chạy `--no-send`.
+- **Script single-source-of-truth**: worker Railway chốt 1 lần lúc 15:10 vào
+  `meta['script:<ngày>']` (và gửi tele "🎬 Script TikTok hôm nay") — DB tải về là
+  video local dùng đúng bản đó, KHÔNG gen lại. Local chỉ tự gen khi DB chưa có
+  (worker chưa deploy bản mới / chạy thử).
 - Cảnh bám theo script (plan_scenes): câu nhắc tên mã → movers, %/sắc xanh đỏ →
   heatmap, chuỗi phiên → chart; script không nhắc thì cảnh đó không chiếu (prompt đã
   ép [THÂN] kể đủ 3 ý nên bình thường đủ cảnh). Số đếm ở hook = số đầu tiên script

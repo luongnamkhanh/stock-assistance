@@ -566,8 +566,10 @@ def preview():
     timeline = build_timeline(["hook", "chart", "heatmap", "movers", "outro"], [4.0] * 5)
     demo = chunks_with_times(
         "Đây là caption karaoke chạy thử để xem vị trí vùng an toàn phía dưới", 0, 20)
+    pdir = OUT / "preview"
+    pdir.mkdir(parents=True, exist_ok=True)
     for name, a, b in timeline:
-        f = OUT / f"preview_{name}.png"
+        f = pdir / f"{name}.png"
         render_frame((a + b) / 2, ctx, timeline, demo).save(f)
         print("preview:", f)
 

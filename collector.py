@@ -591,6 +591,12 @@ def poll_commands(db, wait=25):
 
 
 def make_script(db):
+    """Script chot 1 lan/ngay vao meta['script:<ngay>'] — worker goi luc 15:10 la
+    nguon chan ly; /script va video local doc lai cung ban (DB volume duoc tai ve)."""
+    key = f"script:{now_vn().date().isoformat()}"
+    saved = db.execute("SELECT v FROM meta WHERE k=?", (key,)).fetchone()
+    if saved:
+        return saved[0]
     data = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
     ts = db.execute("SELECT MAX(ts) FROM snapshots").fetchone()[0]
     if ts:  # % gia nhom GTGD lon — de script co the ke ve sac xanh/do (canh heatmap)
@@ -599,7 +605,10 @@ def make_script(db):
         data += "\nGiá mã GTGD lớn hôm nay: " + ", ".join(f"{s} {p:+.1f}%" for s, p in heat)
     from brief import call_llm  # lazy — tranh circular import
     text = call_llm(SCRIPT_SYSTEM, f"Dữ liệu phiên hôm nay:\n\n{data}\n\nViết script.").strip()
-    return f"🎬 Script TikTok hôm nay:\n\n{text}"[:4000]
+    out = f"🎬 Script TikTok hôm nay:\n\n{text}"[:4000]
+    db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, out))
+    db.commit()
+    return out
 
 
 def maybe_send_summary(db):
