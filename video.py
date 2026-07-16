@@ -359,6 +359,7 @@ def make_video(out=None):
     concat_wavs(wavs, audio)
 
     timeline = build_timeline(*durs)
+    (OUT / "timeline.json").write_text(json.dumps(timeline))  # cho --frames biet moc canh
     karaoke = []
     start = 0.0
     for text, dur in zip(parts, durs):
@@ -378,6 +379,31 @@ def make_video(out=None):
         code = proc.wait()
     if code != 0:
         raise RuntimeError("ffmpeg failed")
+    return out
+
+
+def frames(video=None):
+    """Trich 2 frame/canh (dau + giua) de soat bang mat — rule: moi frame bat ky
+    cua video phai doc duoc day du noi dung (khong caption trong, khong so cut)."""
+    video = video or OUT / "daily.mp4"
+    tl_f = OUT / "timeline.json"
+    if tl_f.exists():
+        marks = []
+        for name, a, b in json.loads(tl_f.read_text()):
+            marks += [(f"{name}_dau", a + 0.45), (f"{name}_giua", (a + b) / 2)]
+    else:  # video cu chua co timeline -> chia deu theo thoi luong
+        dur = float(subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+             str(video)], capture_output=True, text=True, check=True).stdout)
+        marks = [(f"p{i}", dur * f) for i, f in
+                 enumerate((0.03, 0.15, 0.3, 0.45, 0.55, 0.7, 0.85, 0.97))]
+    out = []
+    for name, t in marks:
+        png = OUT / f"frame_{name}.png"
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}",
+                        "-i", str(video), "-frames:v", "1", str(png)], check=True)
+        out.append(png)
+        print("frame:", png)
     return out
 
 
@@ -481,6 +507,8 @@ if __name__ == "__main__":
         selftest()
     elif "--preview" in sys.argv:
         preview()
+    elif "--frames" in sys.argv:
+        frames()
     else:
         path = make_video()
         print("Video:", path)
