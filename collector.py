@@ -49,6 +49,7 @@ STALL_MINUTES = 30         # state: cua so do toc do gan nhat
 RATE_TH = 1e9              # state: |net 30'| < 1 ty => coi nhu chung lai
 WL_FACTOR = 0.5            # watchlist: nguong spike & state nhan he so nay
 ACCEL_MIN_LAST = 1.5e9     # accel: nhip cuoi >= 1.5 ty (nua nguong spike — tin hieu som)
+ACCEL_MIN_SHARE = 0.10     # accel: nhip cuoi phai chiem >= 10% GTGD cua ma trong nhip do
 DB = Path(os.environ.get("DB_PATH", str(Path(__file__).parent / "flows.db")))
 CONFIG = Path(__file__).parent / "telegram.json"  # {"token": ..., "chat_id": ...} — keep private
 VN_TZ = timezone(timedelta(hours=7))
@@ -314,7 +315,7 @@ def detect_accel(db, ts, wl):
     if len(tss) < 4:
         return []
     q = """
-    SELECT t3.symbol, t3.day_value,
+    SELECT t3.symbol, t3.day_value, t3.day_value - t2.day_value,
            (t1.buy_val - t1.sell_val) - (t0.buy_val - t0.sell_val),
            (t2.buy_val - t2.sell_val) - (t1.buy_val - t1.sell_val),
            (t3.buy_val - t3.sell_val) - (t2.buy_val - t2.sell_val),
@@ -325,13 +326,15 @@ def detect_accel(db, ts, wl):
     """
     cooldown = (datetime.fromisoformat(ts) - timedelta(minutes=COOLDOWN_MINUTES)).isoformat(timespec="seconds")
     alerts, msgs = [], []
-    for sym, day_value, d1, d2, d3, day_net, price, pct in db.execute(q, (tss[3], tss[2], tss[1], tss[0])):
+    for sym, day_value, win3, d1, d2, d3, day_net, price, pct in db.execute(q, (tss[3], tss[2], tss[1], tss[0])):
         f = WL_FACTOR if sym in wl else 1.0
         same_sign = (d1 > 0 and d2 > 0 and d3 > 0) or (d1 < 0 and d2 < 0 and d3 < 0)
         if day_value < MIN_DAY_VALUE * f or not same_sign or abs(d3) < ACCEL_MIN_LAST * f:
             continue
         if not (abs(d1) < abs(d2) < abs(d3)):
             continue
+        if win3 <= 0 or abs(d3) / win3 < ACCEL_MIN_SHARE:
+            continue  # ma to: tang toc nhung chim trong GTGD -> nhieu, bo qua
         direction = "ABUY" if d3 > 0 else "ASELL"
         if db.execute("SELECT 1 FROM alerts WHERE symbol=? AND direction=? AND ts>?",
                       (sym, direction, cooldown)).fetchone():
@@ -690,11 +693,14 @@ def selftest():
     # detect_accel: 3 nhip poll cung chieu, do lon tang dan => TANG TOC
     db2 = sqlite3.connect(":memory:")
     db2.executescript(SCHEMA)
+    dvs = {"10:00": 100e9, "10:05": 110e9, "10:10": 120e9, "10:15": 140e9}   # win cuoi 20 ty -> share 25%
+    big = {"10:00": 100e9, "10:05": 300e9, "10:10": 600e9, "10:15": 1000e9}  # win cuoi 400 ty -> share ~1%
     for hhmm, bbb, ccc in (("10:00", 1e9, 1e9), ("10:05", 2.2e9, 6e9),
                            ("10:10", 4.9e9, 8e9), ("10:15", 9.9e9, 9e9)):
-        for sym, buy in (("BBB", bbb), ("CCC", ccc)):  # CCC giam toc -> khong bao
-            db2.execute("INSERT INTO snapshots VALUES (?,?,?,0,0,0,1e6,20000,100e9,1.0)",
-                        (f"{day}T{hhmm}:00+07:00", sym, buy))
+        # CCC giam toc -> khong bao; EEE tang toc nhung chim trong GTGD lon -> khong bao
+        for sym, buy, dv in (("BBB", bbb, dvs[hhmm]), ("CCC", ccc, dvs[hhmm]), ("EEE", bbb, big[hhmm])):
+            db2.execute("INSERT INTO snapshots VALUES (?,?,?,0,0,0,1e6,20000,?,1.0)",
+                        (f"{day}T{hhmm}:00+07:00", sym, buy, dv))
     db2.commit()
     msgs = detect_accel(db2, f"{day}T10:15:00+07:00", set())
     assert len(msgs) == 1 and "BBB" in msgs[0] and "TĂNG TỐC" in msgs[0], msgs
