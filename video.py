@@ -480,6 +480,7 @@ def stage_render(db, segs, wavs):
     if code != 0:
         raise RuntimeError("ffmpeg failed")
     shutil.copy(out, d / "daily.mp4")  # ban moi nhat cua ngay
+    frames(out)  # keyframes QA luon co san trong <ngay>/frames/
     return out
 
 
