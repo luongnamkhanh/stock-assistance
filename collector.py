@@ -271,9 +271,13 @@ def _trend_ctx(rows):
 
 
 def trend_ctx(sym):
-    """Loi mang/API -> chuoi rong, alert van gui binh thuong."""
+    """Loi mang/API -> chuoi rong, alert van gui binh thuong.
+    VNDirect tra ca ngay hom nay (intraday) -> bo ra, chi giu phien DA CHOT
+    (hom nay da co dong 'Ca phien' trong alert roi)."""
     try:
-        return _trend_ctx(fetch_foreign_daily(sym, 5))
+        today = now_vn().date().isoformat()
+        rows = [r for r in fetch_foreign_daily(sym, 6) if r["tradingDate"] < today]
+        return _trend_ctx(rows[-5:])
     except Exception:
         return ""
 
