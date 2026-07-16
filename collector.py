@@ -116,7 +116,9 @@ Nhiệm vụ: từ dữ liệu giao dịch khối ngoại hôm nay, viết scrip
 
 Cấu trúc bắt buộc (plain text):
 [HOOK] 1 câu mở đầu gây chú ý bằng con số ấn tượng nhất của phiên. Không chào hỏi.
-[THÂN] 3-4 câu ngắn: diễn biến chính của khối ngoại, top gom/xả, sắc xanh/đỏ và % giá của nhóm mã lớn, và điểm bất thường đáng chú ý nhất (chuỗi phiên, đảo chiều...).
+[THÂN] 3-5 câu ngắn, kể ĐỦ 3 ý theo mạch: (1) chuỗi/xu hướng các phiên gần đây,
+(2) sắc xanh/đỏ và % giá nổi bật của nhóm mã giao dịch lớn, (3) top gom/xả kèm số tỷ;
+thêm điểm bất thường nếu có (đảo chiều, chuỗi phiên dài...).
 [KẾT] 1 câu mời theo dõi kênh để cập nhật phiên sau.
 Dòng cuối: 4-5 hashtag tiếng Việt.
 

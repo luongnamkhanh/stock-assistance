@@ -14,11 +14,13 @@ import math
 import os
 import re
 import sqlite3
+import shutil
 import subprocess
 import sys
 import time
 import urllib.request
 import wave
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -28,6 +30,14 @@ from collector import DB, fetch_foreign_daily, make_script
 load_env()
 
 OUT = Path(__file__).parent / "video_out"
+
+
+def day_dir():
+    """Artifact chot theo ngay: video_out/YYYY-MM-DD/ — script/voice/render cua
+    cung 1 ngay song chung 1 folder, khong ghi de cheo ngay."""
+    d = OUT / datetime.now().strftime("%Y-%m-%d")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 W, H = 1080, 1920
 BG, FG = (15, 17, 21), (240, 240, 245)
 GREEN, RED, DIM = (34, 197, 94), (239, 68, 68), (140, 145, 160)
@@ -319,6 +329,7 @@ def hook_number(text, fallback):
 
 TREND_RE = re.compile(r"\d+\s*phiên|liên tiếp|chuỗi|lũy kế|đảo chiều|hạ nhiệt|xu hướng", re.I)
 HEAT_RE = re.compile(r"%|phần trăm|sắc xanh|sắc đỏ|nhuộm|bứt phá|tăng trần|giảm sàn|tăng giá|giảm giá", re.I)
+FLOW_RE = re.compile(r"gom|xả|mua|bán|\btỷ\b", re.I)  # cau noi dong tien (vs cau thuan % gia)
 
 
 def plan_scenes(hook, than, ket, symbols):
@@ -332,7 +343,8 @@ def plan_scenes(hook, than, ket, symbols):
         if not s:
             continue
         if sym_re and sym_re.search(s):
-            sc = "movers"
+            # co ten ma nhung thuan % gia (khong gom/xa/ty) -> van la noi dung heatmap
+            sc = "heatmap" if HEAT_RE.search(s) and not FLOW_RE.search(s) else "movers"
         elif TREND_RE.search(s):
             sc = "chart"
         elif HEAT_RE.search(s):
@@ -403,31 +415,57 @@ def build_ctx(db):
             "heat": heatmap_rows(db), "gom": gom, "xa": xa}
 
 
-def make_video(out=None):
-    OUT.mkdir(exist_ok=True)
-    out = out or OUT / "daily.mp4"
-    db = sqlite3.connect(DB)
-    script = make_script(db).split("\n\n", 1)[-1]  # bo header "🎬 ..."
-    ctx = build_ctx(db)
-    segs = plan_scenes(*split_script(script), [s for s, *_ in ctx["gom"] + ctx["xa"]])
-    ctx["net_ty"] = hook_number(segs[0][1], ctx["net_ty"])  # so tren hinh = so voice doc
+def stage_script(db, force=False):
+    """Stage 1 — chot script cua ngay (1 lan goi Gemini); da chot thi dung lai."""
+    f = day_dir() / "script.txt"
+    if f.exists() and not force:
+        print("script: dung ban da chot", f)
+        return f.read_text()
+    text = make_script(db).split("\n\n", 1)[-1]  # bo header "🎬 ..."
+    f.write_text(text)
+    print("script: chot ban moi", f)
+    return text
+
+
+def stage_tts(db, script, force=False):
+    """Stage 2 — chot voice: scene plan (segs.json) + TTS tung doan (s{i}.wav).
+    Da co du artifact thi dung lai; thieu wav nao (crash giua chung) thi TTS bu."""
+    d = day_dir()
+    segs_f = d / "segs.json"
+    if segs_f.exists() and not force:
+        segs = [tuple(x) for x in json.loads(segs_f.read_text())]
+    else:
+        gom, xa = top_mover_rows(db)
+        segs = plan_scenes(*split_script(script), [s for s, *_ in gom + xa])
+        segs_f.write_text(json.dumps(segs, ensure_ascii=False))
     wavs = []
     for i, (_, text) in enumerate(segs):
-        wav_f = OUT / f"s{i}.wav"
-        tts(text, wav_f)
-        wavs.append(wav_f)
+        w = d / f"s{i}.wav"
+        if force or not w.exists():
+            tts(text, w)
+        wavs.append(w)
+    return segs, wavs
+
+
+def stage_render(db, segs, wavs):
+    """Stage 3 — thuan local (PIL + ffmpeg, khong API): lap lai thoai mai khi chinh
+    visual/animation, script & voice giu nguyen. Moi lan ra 1 ban render-HHMM.mp4."""
+    d = day_dir()
+    ctx = build_ctx(db)
+    ctx["net_ty"] = hook_number(segs[0][1], ctx["net_ty"])  # so tren hinh = so voice doc
     durs = [wav_dur(p) for p in wavs]
-    audio = OUT / "audio.wav"
+    audio = d / "audio.wav"
     concat_wavs(wavs, audio)
 
     timeline = build_timeline([n for n, _ in segs], durs)
-    (OUT / "timeline.json").write_text(json.dumps(timeline))  # cho --frames biet moc canh
+    (d / "timeline.json").write_text(json.dumps(timeline))  # cho --frames biet moc canh
     karaoke = []
     start = 0.0
     for (_, text), dur in zip(segs, durs):
         karaoke += chunks_with_times(text, start, dur)
         start += dur
 
+    out = d / f"render-{datetime.now():%H%M}.mp4"
     proc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error",
          "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
@@ -441,16 +479,28 @@ def make_video(out=None):
         code = proc.wait()
     if code != 0:
         raise RuntimeError("ffmpeg failed")
+    shutil.copy(out, d / "daily.mp4")  # ban moi nhat cua ngay
     return out
+
+
+def make_video():
+    db = sqlite3.connect(DB)
+    fresh = "--fresh" in sys.argv  # chot lai script + voice (mac dinh: dung ban da chot)
+    script = stage_script(db, force=fresh)
+    segs, wavs = stage_tts(db, script, force=fresh)
+    return stage_render(db, segs, wavs)
 
 
 def frames(video=None):
     """Trich 2 frame/canh (dau + giua) de soat bang mat — rule: moi frame bat ky
     cua video phai doc duoc day du noi dung (khong caption trong, khong so cut)."""
-    video = video or OUT / "daily.mp4"
-    tl_f = OUT / "timeline.json"
-    for p in OUT.glob("frame_*.png"):
-        p.unlink()  # don frame cu — canh gio dong theo script, ten/so luong doi tung ngay
+    d = day_dir()
+    video = video or d / "daily.mp4"
+    tl_f = d / "timeline.json"
+    fdir = d / "frames"
+    fdir.mkdir(exist_ok=True)
+    for p in fdir.glob("*.png"):
+        p.unlink()  # don frame cu — canh dong theo script, ten/so luong doi tung ngay
     if tl_f.exists():
         marks = []
         for i, (name, a, b) in enumerate(json.loads(tl_f.read_text())):
@@ -463,7 +513,7 @@ def frames(video=None):
                  enumerate((0.03, 0.15, 0.3, 0.45, 0.55, 0.7, 0.85, 0.97))]
     out = []
     for name, t in marks:
-        png = OUT / f"frame_{name}.png"
+        png = fdir / f"{name}.png"
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}",
                         "-i", str(video), "-frames:v", "1", str(png)], check=True)
         out.append(png)
@@ -544,6 +594,10 @@ def selftest():
     assert "VHM" in segs[3][1]          # 2 cau movers lien nhau gop 1 doan TTS
     assert "Ngày mai" in segs[3][1]     # cau khong ro chu de -> di theo canh truoc
 
+    segs = plan_scenes("Mở đầu.", "VHM bứt phá 5%, VIC và ACB cùng tăng gần 3%. "
+                       "Họ gom mạnh VIC 253 tỷ.", "Kết.", ["VIC", "VHM", "ACB"])
+    assert [s for s, _ in segs] == ["hook", "heatmap", "movers", "outro"], segs
+
     assert hook_number("Khối ngoại xả ròng hơn 4.600 tỷ đồng!", -29) == -4600
     assert hook_number("Họ gom 1,5 nghìn tỷ hôm nay", -29) == 1500
     assert hook_number("Một phiên không có gì nổi bật.", -29) == -29
@@ -588,17 +642,12 @@ if __name__ == "__main__":
         preview()
     elif "--frames" in sys.argv:
         frames()
-    elif "--send" in sys.argv:  # gui daily.mp4 hien co, khong render lai
-        send_video(OUT / "daily.mp4")
+    elif "--send" in sys.argv:  # gui ban moi nhat cua ngay, khong render lai
+        send_video(day_dir() / "daily.mp4")
         print("Đã gửi vào Telegram")
     else:
         path = make_video()
         print("Video:", path)
-        import shutil
-        from datetime import datetime
-        keep = path.with_name(f"daily-{datetime.now():%Y%m%d-%H%M}.mp4")
-        shutil.copy(path, keep)  # daily.mp4 bi ghi de moi render — giu lai tung ban
-        print("Lưu bản:", keep)
         if "--no-send" not in sys.argv:  # tele vua la noi duyet vua la archive
             send_video(path)
             print("Đã gửi vào Telegram")

@@ -13,12 +13,19 @@ bước QA — video đăng public, một frame lỗi là lên sóng luôn.
 
 - Chạy từ repo root bằng `.venv/bin/python`. Cần: ffmpeg, `.env` có `GEMINI_API_KEY`,
   railway CLI đã login + link project `meticulous-happiness`.
-- Output: `video_out/daily.mp4` — 1080×1920, 30fps, audio AAC. Mỗi render tự lưu thêm
-  bản `daily-YYYYMMDD-HHMM.mp4` (daily.mp4 bị ghi đè) và TỰ GỬI Telegram — khi đang
-  QA/debug phải chạy với `--no-send`.
+- Output theo ngày — `video_out/YYYY-MM-DD/`: `script.txt` (chốt 1 lần/ngày),
+  `segs.json` + `s*.wav` (voice chốt theo script), `render-HHMM.mp4` (mỗi lần render
+  1 bản, không ghi đè), `daily.mp4` (bản mới nhất), `frames/` (QA). Video 1080×1920,
+  30fps, audio AAC.
+- Pipeline 3 stage DECOUPLED, chạy `video.py` là idempotent: script/voice đã chốt
+  thì dùng lại, chỉ render lại (thuần local, $0) — chỉnh visual/animation lặp thoải
+  mái không đổi content, không tốn API. `--fresh` = chốt lại script + voice (dùng khi
+  data đổi hoặc user chê script). Render xong TỰ GỬI Telegram — đang QA/debug phải
+  chạy `--no-send`.
 - Cảnh bám theo script (plan_scenes): câu nhắc tên mã → movers, %/sắc xanh đỏ →
-  heatmap, chuỗi phiên → chart; script không nhắc thì cảnh đó không chiếu. Số đếm ở
-  hook = số đầu tiên script đọc (hook_number).
+  heatmap, chuỗi phiên → chart; script không nhắc thì cảnh đó không chiếu (prompt đã
+  ép [THÂN] kể đủ 3 ý nên bình thường đủ cảnh). Số đếm ở hook = số đầu tiên script
+  đọc (hook_number).
 - **Thời lượng chuẩn 21–34s** (completion-rate TikTok). >40s = script quá dài → báo
   user trước khi gửi, đừng tự gửi.
 - **Palette ĐÓNG** — mọi màu trong `video.py` phải thuộc list này, thêm màu = sửa
@@ -44,13 +51,13 @@ bước QA — video đăng public, một frame lỗi là lên sóng luôn.
    TTS hết quota ngày sẽ tự fallback model, quá nữa thì báo user chờ).
 3. **QA bắt buộc — nhìn hình thật, không tin code** (rule mượn từ noddle, từng cứu
    7/21 hình bên đó): `.venv/bin/python video.py --frames` rồi **Read TỪNG PNG**
-   `video_out/frame_*.png` và soát:
+   `video_out/<YYYY-MM-DD>/frames/*.png` và soát:
    - Mọi frame đọc được đầy đủ nội dung — frame `_dau` mỗi cảnh là chỗ lộ lỗi:
      caption chưa hiện, count-up đang số lửng, bar chưa mọc mà label đã hiện.
    - Không chữ đè chữ / đè cột; heatmap 4×5 không tràn lề; card movers không chạm
      vùng caption.
    - ▲▼ / chữ chiều hiện cạnh mọi con số màu (không màu-trần).
-   - `ffprobe -v error -show_entries format=duration -of csv=p=0 video_out/daily.mp4`
+   - `ffprobe -v error -show_entries format=duration -of csv=p=0 video_out/<YYYY-MM-DD>/daily.mp4`
      trong khoảng 21–40s.
 4. Lỗi → sửa `video.py` → chạy `--selftest` → render lại → QA lại đến sạch.
 5. **Gửi**: `--send` gửi `daily.mp4` hiện có vào chat đầu tiên trong config, KHÔNG
