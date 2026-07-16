@@ -146,19 +146,66 @@ def load_config():
     return cfg
 
 
+VPS_LIST = "https://bgapidatafeed.vps.com.vn/getlistallstock"
+VPS_DATA = "https://bgapidatafeed.vps.com.vn/getliststockdata/"
+_vps_syms = []  # ponytail: cache RAM ca doi process, restart thi lay lai
+
+
+def _f(x):
+    """VPS tra field dang string/None."""
+    try:
+        return float(x or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _vps_row(x):
+    """Map 1 record VPS -> tuple snapshot (chua co ts). Don vi: gia tri nghin dong
+    (x1000 = VND), gia nghin dong, lot theo lo 10. changePc cua VPS KHONG co dau
+    nen pct phai tinh tu gia tham chieu r."""
+    last, ref = _f(x.get("lastPrice")), _f(x.get("r"))
+    pct = round((last - ref) / ref * 100, 2) if ref else 0.0
+    return (x["sym"], _f(x.get("fBValue")) * 1e3, _f(x.get("fSValue")) * 1e3,
+            _f(x.get("fBVol")), _f(x.get("fSVolume")), _f(x.get("fRoom")),
+            last * 1e3, _f(x.get("lot")) * 10 * _f(x.get("avePrice")) * 1e3, pct)
+
+
+def _vps_get(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
+def fetch_vps():
+    """Nguon du phong khi iBoard chan IP datacenter (403 tren Railway).
+    Cung feed goc tu so — gia tri khop tuyet doi voi iBoard (da doi chieu)."""
+    global _vps_syms
+    if not _vps_syms:
+        _vps_syms = sorted(s["stock_code"] for s in _vps_get(VPS_LIST)
+                           if s.get("post_to") == "HOSE" and len(s.get("stock_code") or "") == 3)
+    rows = []
+    for i in range(0, len(_vps_syms), 100):
+        rows += [_vps_row(x) for x in _vps_get(VPS_DATA + ",".join(_vps_syms[i:i + 100]))]
+    return rows
+
+
 def poll(db):
-    with urllib.request.urlopen(urllib.request.Request(API, headers=HEADERS), timeout=30) as r:
-        data = json.load(r)["data"]
+    try:
+        with urllib.request.urlopen(urllib.request.Request(API, headers=HEADERS), timeout=30) as r:
+            data = json.load(r)["data"]
+        rows = [
+            (x["stockSymbol"], x.get("buyForeignValue") or 0, x.get("sellForeignValue") or 0,
+             x.get("buyForeignQtty") or 0, x.get("sellForeignQtty") or 0,
+             x.get("remainForeignQtty") or 0, x.get("matchedPrice") or 0,
+             x.get("nmTotalTradedValue") or 0, x.get("priceChangePercent") or 0)
+            for x in data
+            if x.get("stockType") == "s" and x.get("stockSymbol") and len(x["stockSymbol"]) == 3
+        ]
+    except Exception:
+        rows = fetch_vps()  # iBoard chan IP datacenter -> fallback VPS
     ts = now_vn().isoformat(timespec="seconds")
-    rows = [
-        (ts, x["stockSymbol"], x.get("buyForeignValue") or 0, x.get("sellForeignValue") or 0,
-         x.get("buyForeignQtty") or 0, x.get("sellForeignQtty") or 0,
-         x.get("remainForeignQtty") or 0, x.get("matchedPrice") or 0,
-         x.get("nmTotalTradedValue") or 0, x.get("priceChangePercent") or 0)
-        for x in data
-        if x.get("stockType") == "s" and x.get("stockSymbol") and len(x["stockSymbol"]) == 3
-    ]
-    db.executemany("INSERT OR REPLACE INTO snapshots VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+    db.executemany("INSERT OR REPLACE INTO snapshots VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   [(ts, *r) for r in rows])
     db.commit()
     return ts, len(rows)
 
@@ -495,6 +542,14 @@ def selftest():
     assert "3 phiên mua ròng liên tiếp" in msg and "🟥" * 7 + "🟩" * 3 in msg, msg
     rows2 = rows[:8]  # phien cuoi vua flip
     assert "ĐẢO CHIỀU" in format_trend("TEST", rows2)
+
+    # _vps_row: field string, gia tri nghin dong x1000 = VND, lot theo lo 10,
+    # pct phai co DAU tinh tu tham chieu r (changePc cua VPS khong co dau)
+    row = _vps_row({"sym": "ABS", "fBValue": "1000", "fSValue": "2000.5", "fBVol": "10",
+                    "fSVolume": "20", "fRoom": "99", "lastPrice": "12.6", "r": "12.8",
+                    "lot": "100", "avePrice": "12.7", "changePc": "1.56"})
+    assert row == ("ABS", 1000000.0, 2000500.0, 10.0, 20.0, 99.0, 12600.0, 12700000.0, -1.56), row
+    assert _vps_row({"sym": "XXX"}) == ("XXX", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     print("selftest OK")
 
 
