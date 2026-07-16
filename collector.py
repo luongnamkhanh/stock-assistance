@@ -116,7 +116,7 @@ Nhiệm vụ: từ dữ liệu giao dịch khối ngoại hôm nay, viết scrip
 
 Cấu trúc bắt buộc (plain text):
 [HOOK] 1 câu mở đầu gây chú ý bằng con số ấn tượng nhất của phiên. Không chào hỏi.
-[THÂN] 3-4 câu ngắn: diễn biến chính của khối ngoại, top gom/xả, và điểm bất thường đáng chú ý nhất (chuỗi phiên, đảo chiều...).
+[THÂN] 3-4 câu ngắn: diễn biến chính của khối ngoại, top gom/xả, sắc xanh/đỏ và % giá của nhóm mã lớn, và điểm bất thường đáng chú ý nhất (chuỗi phiên, đảo chiều...).
 [KẾT] 1 câu mời theo dõi kênh để cập nhật phiên sau.
 Dòng cuối: 4-5 hashtag tiếng Việt.
 
@@ -590,6 +590,11 @@ def poll_commands(db, wait=25):
 
 def make_script(db):
     data = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
+    ts = db.execute("SELECT MAX(ts) FROM snapshots").fetchone()[0]
+    if ts:  # % gia nhom GTGD lon — de script co the ke ve sac xanh/do (canh heatmap)
+        heat = db.execute("SELECT symbol, COALESCE(pct, 0) FROM snapshots WHERE ts=? "
+                          "ORDER BY day_value DESC LIMIT 8", (ts,)).fetchall()
+        data += "\nGiá mã GTGD lớn hôm nay: " + ", ".join(f"{s} {p:+.1f}%" for s, p in heat)
     from brief import call_llm  # lazy — tranh circular import
     text = call_llm(SCRIPT_SYSTEM, f"Dữ liệu phiên hôm nay:\n\n{data}\n\nViết script.").strip()
     return f"🎬 Script TikTok hôm nay:\n\n{text}"[:4000]
