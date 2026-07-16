@@ -247,10 +247,35 @@ def detect_spikes(db, ts, wl):
                       (sym, direction, cooldown)).fetchone():
             continue
         alerts.append((ts, sym, direction, net, share, price))
-        msgs.append(spike_msg(sym, net, share, price, pct or 0, day_net))
+        msgs.append(spike_msg(sym, net, share, price, pct or 0, day_net) + trend_ctx(sym))
     db.executemany("INSERT INTO alerts (ts,symbol,direction,net_10m,share,price) VALUES (?,?,?,?,?,?)", alerts)
     db.commit()
     return msgs
+
+
+def _trend_ctx(rows):
+    """1 dong noi alert intraday voi cac phien da chot: o mau + luy ke + streak."""
+    if not rows:
+        return ""
+    vals = [(r["netVal"] or 0) for r in rows]
+    squares = "".join("🟩" if v >= 0 else "🟥" for v in vals)
+    last = vals[-1] >= 0
+    streak = 0
+    for v in reversed(vals):
+        if (v >= 0) != last:
+            break
+        streak += 1
+    side = "mua" if last else "bán"
+    tail = f" — {streak} phiên {side} ròng liên tiếp" if streak >= 3 else ""
+    return f"\n{len(vals)} phiên trước: {squares} lũy kế {sum(vals)/1e9:+,.0f} tỷ{tail}"
+
+
+def trend_ctx(sym):
+    """Loi mang/API -> chuoi rong, alert van gui binh thuong."""
+    try:
+        return _trend_ctx(fetch_foreign_daily(sym, 5))
+    except Exception:
+        return ""
 
 
 def spike_msg(sym, net, share, price, pct, day_net):
@@ -550,6 +575,13 @@ def selftest():
                     "lot": "100", "avePrice": "12.7", "changePc": "1.56"})
     assert row == ("ABS", 1000000.0, 2000500.0, 10.0, 20.0, 99.0, 12600.0, 12700000.0, -1.56), row
     assert _vps_row({"sym": "XXX"}) == ("XXX", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+    # trend context gan vao alert: o vuong + luy ke + streak >=3 moi keu
+    ctx = _trend_ctx([{"netVal": v} for v in (-5e9, -7e9, -3e9, -8e9, -9e9)])
+    assert "🟥🟥🟥🟥🟥" in ctx and "-32" in ctx and "5 phiên bán ròng liên tiếp" in ctx, ctx
+    assert _trend_ctx([]) == ""
+    mixed = _trend_ctx([{"netVal": v} for v in (5e9, -2e9, 3e9)])
+    assert "🟩🟥🟩" in mixed and "liên tiếp" not in mixed, mixed
     print("selftest OK")
 
 
