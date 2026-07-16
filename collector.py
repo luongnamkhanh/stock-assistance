@@ -122,11 +122,11 @@ Dòng cuối: 4-5 hashtag tiếng Việt.
 Quy tắc: giọng nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc thành tiếng, số liệu làm tròn
 cho dễ nghe. KHÔNG khuyến nghị mua/bán. KHÔNG bịa gì ngoài dữ liệu được đưa."""
 
-STATE_MSG = {
-    "GOM":       "🟢 {s} vào trạng thái GOM — KN ròng {d:+.1f} tỷ từ đầu phiên, 30' qua {r:+.1f} tỷ",
-    "GOM_CHUNG": "🟡 {s} lực gom CHỮNG LẠI — ròng {d:+.1f} tỷ từ đầu phiên nhưng 30' qua chỉ {r:+.1f} tỷ",
-    "XA":        "🔴 {s} vào trạng thái XẢ — KN ròng {d:+.1f} tỷ từ đầu phiên, 30' qua {r:+.1f} tỷ",
-    "XA_CHUNG":  "🟠 {s} lực xả CHỮNG LẠI — ròng {d:+.1f} tỷ từ đầu phiên nhưng 30' qua chỉ {r:+.1f} tỷ",
+STATE_MSG = {  # dong 1 cua khung 3 tang — boi canh phien nam o ctx_line dung chung
+    "GOM":       "🟢 {s} — vào trạng thái GOM: 30' qua {r:+.1f} tỷ",
+    "GOM_CHUNG": "🟡 {s} — lực gom CHỮNG LẠI: 30' qua chỉ {r:+.1f} tỷ",
+    "XA":        "🔴 {s} — vào trạng thái XẢ: 30' qua {r:+.1f} tỷ",
+    "XA_CHUNG":  "🟠 {s} — lực xả CHỮNG LẠI: 30' qua chỉ {r:+.1f} tỷ",
 }
 
 
@@ -317,14 +317,15 @@ def detect_accel(db, ts, wl):
     SELECT t3.symbol, t3.day_value,
            (t1.buy_val - t1.sell_val) - (t0.buy_val - t0.sell_val),
            (t2.buy_val - t2.sell_val) - (t1.buy_val - t1.sell_val),
-           (t3.buy_val - t3.sell_val) - (t2.buy_val - t2.sell_val)
+           (t3.buy_val - t3.sell_val) - (t2.buy_val - t2.sell_val),
+           t3.buy_val - t3.sell_val, t3.price, t3.pct
     FROM snapshots t3
     JOIN snapshots t2 USING (symbol) JOIN snapshots t1 USING (symbol) JOIN snapshots t0 USING (symbol)
     WHERE t3.ts=? AND t2.ts=? AND t1.ts=? AND t0.ts=?
     """
     cooldown = (datetime.fromisoformat(ts) - timedelta(minutes=COOLDOWN_MINUTES)).isoformat(timespec="seconds")
     alerts, msgs = [], []
-    for sym, day_value, d1, d2, d3 in db.execute(q, (tss[3], tss[2], tss[1], tss[0])):
+    for sym, day_value, d1, d2, d3, day_net, price, pct in db.execute(q, (tss[3], tss[2], tss[1], tss[0])):
         f = WL_FACTOR if sym in wl else 1.0
         same_sign = (d1 > 0 and d2 > 0 and d3 > 0) or (d1 < 0 and d2 < 0 and d3 < 0)
         if day_value < MIN_DAY_VALUE * f or not same_sign or abs(d3) < ACCEL_MIN_LAST * f:
@@ -336,7 +337,8 @@ def detect_accel(db, ts, wl):
                       (sym, direction, cooldown)).fetchone():
             continue
         alerts.append((ts, sym, direction, d3, 0, 0))
-        msgs.append(accel_msg(sym, (d1, d2, d3)) + trend_ctx(sym, db))
+        msgs.append(accel_msg(sym, (d1, d2, d3)) + "\n"
+                    + ctx_line(day_net, price or 0, pct or 0) + trend_ctx(sym, db))
     db.executemany("INSERT INTO alerts (ts,symbol,direction,net_10m,share,price) VALUES (?,?,?,?,?,?)", alerts)
     db.commit()
     return msgs
@@ -373,13 +375,17 @@ def _story_line(row):
     return "\nHôm qua: " + " · ".join(bits) if bits else ""
 
 
+def ctx_line(day_net, price, pct):
+    """Dong 2 cua khung 3 tang — boi canh phien, DUNG CHUNG cho moi loai alert."""
+    return (f"Cả phiên: {'mua' if day_net >= 0 else 'bán'} ròng {abs(day_net)/1e9:.1f} tỷ "
+            f"| Giá {price:,.0f} ({pct:+.1f}% hôm nay)")
+
+
 def spike_msg(sym, net, share, price, pct, day_net):
     icon, side = ("🟢", "mua ròng") if net > 0 else ("🔴", "bán ròng")
     note = "\n⚠️ KN chiếm gần trọn giao dịch nhịp này — khả năng lệnh thỏa thuận" if share > 0.8 else ""
     return (f"{icon} {sym} — Khối ngoại {side} {abs(net)/1e9:.1f} tỷ trong {WINDOW_MINUTES} phút qua "
-            f"(chiếm {share:.0%} giao dịch của mã){note}\n"
-            f"Cả phiên: {'mua' if day_net >= 0 else 'bán'} ròng {abs(day_net)/1e9:.1f} tỷ "
-            f"| Giá {price:,.0f} ({pct:+.1f}% hôm nay)")
+            f"(chiếm {share:.0%} giao dịch của mã){note}\n" + ctx_line(day_net, price, pct))
 
 
 def detect_states(db, ts, wl):
@@ -392,12 +398,12 @@ def detect_states(db, ts, wl):
     SELECT a.symbol,
            a.buy_val - a.sell_val AS day_net,
            (a.buy_val - a.sell_val) - (b.buy_val - b.sell_val) AS recent,
-           a.day_value
+           a.day_value, a.price, a.pct
     FROM snapshots a JOIN snapshots b USING (symbol)
     WHERE a.ts = ? AND b.ts = ?
     """
     msgs = []
-    for sym, day_net, recent, day_value in db.execute(q, (ts, prev_ts)).fetchall():
+    for sym, day_net, recent, day_value, price, pct in db.execute(q, (ts, prev_ts)).fetchall():
         in_wl = sym in wl
         f = WL_FACTOR if in_wl else 1.0
         if not in_wl and day_value < MIN_DAY_VALUE:
@@ -414,7 +420,8 @@ def detect_states(db, ts, wl):
             continue
         db.execute("INSERT OR REPLACE INTO state VALUES (?,?,?)", (sym, regime, day))
         if regime != "NEUTRAL":
-            msgs.append(STATE_MSG[regime].format(s=sym, d=day_net / 1e9, r=recent / 1e9))
+            msgs.append(STATE_MSG[regime].format(s=sym, r=recent / 1e9) + "\n"
+                        + ctx_line(day_net, price or 0, pct or 0) + trend_ctx(sym, db))
     db.commit()
     return msgs
 
@@ -641,6 +648,7 @@ def selftest():
     snap("10:00", 20e9, 0)
     msgs = detect_states(db, f"{day}T10:00:00+07:00", set())
     assert len(msgs) == 1 and "GOM" in msgs[0] and "CHỮNG" not in msgs[0], msgs
+    assert "Cả phiên" in msgs[0] and "Giá 20,000" in msgs[0], msgs  # khung 3 tang thong nhat
     # 10:30: khong mua them => GOM_CHUNG (delta thu hep)
     snap("10:30", 20.1e9, 0)
     msgs = detect_states(db, f"{day}T10:30:00+07:00", set())
@@ -690,6 +698,7 @@ def selftest():
     db2.commit()
     msgs = detect_accel(db2, f"{day}T10:15:00+07:00", set())
     assert len(msgs) == 1 and "BBB" in msgs[0] and "TĂNG TỐC" in msgs[0], msgs
+    assert "Cả phiên" in msgs[0] and "Giá 20,000" in msgs[0], msgs  # khung 3 tang thong nhat
     assert "1.2 → 2.7 → 5.0" in msgs[0], msgs
     assert detect_accel(db2, f"{day}T10:15:00+07:00", set()) == [], "cooldown accel"
 
