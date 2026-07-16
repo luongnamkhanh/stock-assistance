@@ -69,6 +69,11 @@ bước QA — video đăng public, một frame lỗi là lên sóng luôn.
    chạy lại, thuần local $0, script/voice giữ nguyên) → QA lại đến sạch.
 5. **Gửi**: `--send` gửi `daily.mp4` của ngày vào chat đầu tiên trong config, KHÔNG
    render lại. Nếu user chưa duyệt video trong session này thì hỏi trước khi gửi.
+   **Chế độ cron (session tự hành, user vắng mặt)**: QA sạch = gửi luôn không chờ
+   duyệt (tele là nơi duyệt). KHÔNG gửi khi: data không phải hôm nay (nghỉ lễ/cuối
+   tuần → dừng im lặng), duration >40s, hoặc frame lỗi không tự sửa được — khi đó
+   báo ngắn vào tele: `.venv/bin/python -c "from collector import send_telegram;
+   send_telegram('⚠️ Video hôm nay lỗi: <lý do>')"` rồi dừng.
 
 ## Lỗi đã gặp (đừng lặp lại)
 
