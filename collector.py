@@ -48,6 +48,7 @@ DAY_NET_TH = 15e9          # state: |net rong tu dau phien| >= 15 ty => co trang
 STALL_MINUTES = 30         # state: cua so do toc do gan nhat
 RATE_TH = 1e9              # state: |net 30'| < 1 ty => coi nhu chung lai
 WL_FACTOR = 0.5            # watchlist: nguong spike & state nhan he so nay
+ACCEL_MIN_LAST = 1.5e9     # accel: nhip cuoi >= 1.5 ty (nua nguong spike — tin hieu som)
 DB = Path(os.environ.get("DB_PATH", str(Path(__file__).parent / "flows.db")))
 CONFIG = Path(__file__).parent / "telegram.json"  # {"token": ..., "chat_id": ...} — keep private
 VN_TZ = timezone(timedelta(hours=7))
@@ -71,6 +72,13 @@ CREATE TABLE IF NOT EXISTS alerts (
     sent INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS state (symbol TEXT PRIMARY KEY, regime TEXT, day TEXT);
+CREATE TABLE IF NOT EXISTS day_story (   -- dac tinh tung phien, chot luc tong ket 15:10
+    day TEXT, symbol TEXT,
+    net REAL,        -- NN mua/ban rong ca phien (VND)
+    late_net REAL,   -- rieng 30' cuoi (tu 14:15)
+    room_delta REAL, -- room NN cuoi - dau phien (cp)
+    PRIMARY KEY (day, symbol)
+);
 CREATE TABLE IF NOT EXISTS watchlist (symbol TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 """
@@ -247,7 +255,7 @@ def detect_spikes(db, ts, wl):
                       (sym, direction, cooldown)).fetchone():
             continue
         alerts.append((ts, sym, direction, net, share, price))
-        msgs.append(spike_msg(sym, net, share, price, pct or 0, day_net) + trend_ctx(sym))
+        msgs.append(spike_msg(sym, net, share, price, pct or 0, day_net) + trend_ctx(sym, db))
     db.executemany("INSERT INTO alerts (ts,symbol,direction,net_10m,share,price) VALUES (?,?,?,?,?,?)", alerts)
     db.commit()
     return msgs
@@ -270,16 +278,99 @@ def _trend_ctx(rows):
     return f"\n{len(vals)} phiên trước: {squares} lũy kế {sum(vals)/1e9:+,.0f} tỷ{tail}"
 
 
-def trend_ctx(sym):
+def trend_ctx(sym, db=None):
     """Loi mang/API -> chuoi rong, alert van gui binh thuong.
     VNDirect tra ca ngay hom nay (intraday) -> bo ra, chi giu phien DA CHOT
-    (hom nay da co dong 'Ca phien' trong alert roi)."""
+    (hom nay da co dong 'Ca phien' trong alert roi). Co db thi kem dac tinh
+    phien gan nhat tu day_story (tich luy dan tu khi bot chay)."""
     try:
         today = now_vn().date().isoformat()
         rows = [r for r in fetch_foreign_daily(sym, 6) if r["tradingDate"] < today]
-        return _trend_ctx(rows[-5:])
+        out = _trend_ctx(rows[-5:])
+        if db is not None:
+            r = db.execute("SELECT net, late_net, room_delta FROM day_story "
+                           "WHERE symbol=? AND day<? ORDER BY day DESC LIMIT 1",
+                           (sym, today)).fetchone()
+            if r:
+                out += _story_line(r)
+        return out
     except Exception:
         return ""
+
+
+def accel_msg(sym, deltas):
+    icon, side = ("🟢⚡", "GOM") if deltas[-1] > 0 else ("🔴⚡", "XẢ")
+    chain = " → ".join(f"{abs(d)/1e9:.1f}" for d in deltas)
+    return f"{icon} {sym} — {side} TĂNG TỐC: 3 nhịp liên tiếp {chain} tỷ"
+
+
+def detect_accel(db, ts, wl):
+    """3 nhip poll lien tiep cung chieu, do lon tang dan => dong tien dang tang toc.
+    Bao som hon spike (nguong thap hon) vi gia toc moi la tin hieu dan duong."""
+    day = ts[:10]
+    tss = [r[0] for r in db.execute(
+        "SELECT DISTINCT ts FROM snapshots WHERE ts LIKE ? AND ts <= ? ORDER BY ts DESC LIMIT 4",
+        (day + "%", ts))][::-1]
+    if len(tss) < 4:
+        return []
+    q = """
+    SELECT t3.symbol, t3.day_value,
+           (t1.buy_val - t1.sell_val) - (t0.buy_val - t0.sell_val),
+           (t2.buy_val - t2.sell_val) - (t1.buy_val - t1.sell_val),
+           (t3.buy_val - t3.sell_val) - (t2.buy_val - t2.sell_val)
+    FROM snapshots t3
+    JOIN snapshots t2 USING (symbol) JOIN snapshots t1 USING (symbol) JOIN snapshots t0 USING (symbol)
+    WHERE t3.ts=? AND t2.ts=? AND t1.ts=? AND t0.ts=?
+    """
+    cooldown = (datetime.fromisoformat(ts) - timedelta(minutes=COOLDOWN_MINUTES)).isoformat(timespec="seconds")
+    alerts, msgs = [], []
+    for sym, day_value, d1, d2, d3 in db.execute(q, (tss[3], tss[2], tss[1], tss[0])):
+        f = WL_FACTOR if sym in wl else 1.0
+        same_sign = (d1 > 0 and d2 > 0 and d3 > 0) or (d1 < 0 and d2 < 0 and d3 < 0)
+        if day_value < MIN_DAY_VALUE * f or not same_sign or abs(d3) < ACCEL_MIN_LAST * f:
+            continue
+        if not (abs(d1) < abs(d2) < abs(d3)):
+            continue
+        direction = "ABUY" if d3 > 0 else "ASELL"
+        if db.execute("SELECT 1 FROM alerts WHERE symbol=? AND direction=? AND ts>?",
+                      (sym, direction, cooldown)).fetchone():
+            continue
+        alerts.append((ts, sym, direction, d3, 0, 0))
+        msgs.append(accel_msg(sym, (d1, d2, d3)) + trend_ctx(sym, db))
+    db.executemany("INSERT INTO alerts (ts,symbol,direction,net_10m,share,price) VALUES (?,?,?,?,?,?)", alerts)
+    db.commit()
+    return msgs
+
+
+def build_day_story(db, day):
+    """Chot dac tinh phien vao day_story — goi 1 lan luc tong ket 15:10."""
+    span = db.execute("SELECT MIN(ts), MAX(ts) FROM snapshots WHERE ts LIKE ?", (day + "%",)).fetchone()
+    first, last = span
+    if not first:
+        return
+    cut = db.execute("SELECT MAX(ts) FROM snapshots WHERE ts LIKE ? AND ts <= ?",
+                     (day + "%", day + "T14:15:00")).fetchone()[0] or first
+    db.execute("""
+        INSERT OR REPLACE INTO day_story
+        SELECT ?, l.symbol, l.buy_val - l.sell_val,
+               (l.buy_val - l.sell_val) - (c.buy_val - c.sell_val),
+               l.room - f.room
+        FROM snapshots l
+        JOIN snapshots c ON c.symbol = l.symbol AND c.ts = ?
+        JOIN snapshots f ON f.symbol = l.symbol AND f.ts = ?
+        WHERE l.ts = ?""", (day, cut, first, last))
+    db.commit()
+
+
+def _story_line(row):
+    """(net, late_net, room_delta) cua phien gan nhat -> ghi chu neu dang noi."""
+    net, late, room_d = row
+    bits = []
+    if abs(net) >= 10e9 and late * net > 0 and abs(late) >= 0.4 * abs(net):
+        bits.append(f"{'gom' if net > 0 else 'xả'} dồn 30' cuối ({late/1e9:+,.0f}/{net/1e9:+,.0f} tỷ)")
+    if abs(room_d) >= 500_000:  # ponytail: nguong tho, chinh khi thay keu nhieu/it qua
+        bits.append(f"room {'+' if room_d > 0 else '-'}{abs(room_d)/1e6:.1f}tr cp")
+    return "\nHôm qua: " + " · ".join(bits) if bits else ""
 
 
 def spike_msg(sym, net, share, price, pct, day_net):
@@ -506,6 +597,7 @@ def maybe_send_summary(db):
     if not db.execute("SELECT 1 FROM snapshots WHERE ts LIKE ? LIMIT 1", (today + "%",)).fetchone():
         return  # khong co du lieu hom nay (nghi le) -> khong tong ket
     try:
+        build_day_story(db, today)  # chot dac tinh phien de lam giau alert cac ngay sau
         text = "🔔 Tổng kết phiên\n\n" + format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
         send_telegram(text)
         db.execute("INSERT OR REPLACE INTO meta VALUES ('summary_day', ?)", (today,))
@@ -522,7 +614,7 @@ def maybe_send_summary(db):
 def run_once(db):
     ts, n = poll(db)
     wl = get_watchlist(db)
-    msgs = detect_spikes(db, ts, wl) + detect_states(db, ts, wl)
+    msgs = detect_spikes(db, ts, wl) + detect_accel(db, ts, wl) + detect_states(db, ts, wl)
     print(f"[{ts}] snapshot {n} symbols, {len(msgs)} alerts")
     if msgs:
         text = f"📊 Khối ngoại — {ts[11:16]}\n\n" + "\n\n".join(msgs)
@@ -586,6 +678,35 @@ def selftest():
     assert _trend_ctx([]) == ""
     mixed = _trend_ctx([{"netVal": v} for v in (5e9, -2e9, 3e9)])
     assert "🟩🟥🟩" in mixed and "liên tiếp" not in mixed, mixed
+
+    # detect_accel: 3 nhip poll cung chieu, do lon tang dan => TANG TOC
+    db2 = sqlite3.connect(":memory:")
+    db2.executescript(SCHEMA)
+    for hhmm, bbb, ccc in (("10:00", 1e9, 1e9), ("10:05", 2.2e9, 6e9),
+                           ("10:10", 4.9e9, 8e9), ("10:15", 9.9e9, 9e9)):
+        for sym, buy in (("BBB", bbb), ("CCC", ccc)):  # CCC giam toc -> khong bao
+            db2.execute("INSERT INTO snapshots VALUES (?,?,?,0,0,0,1e6,20000,100e9,1.0)",
+                        (f"{day}T{hhmm}:00+07:00", sym, buy))
+    db2.commit()
+    msgs = detect_accel(db2, f"{day}T10:15:00+07:00", set())
+    assert len(msgs) == 1 and "BBB" in msgs[0] and "TĂNG TỐC" in msgs[0], msgs
+    assert "1.2 → 2.7 → 5.0" in msgs[0], msgs
+    assert detect_accel(db2, f"{day}T10:15:00+07:00", set()) == [], "cooldown accel"
+
+    # day_story: net cuoi phien, net 30' cuoi (tu 14:15), thay doi room
+    db3 = sqlite3.connect(":memory:")
+    db3.executescript(SCHEMA)
+    for hhmm, buy, room in (("09:30", 2e9, 100), ("14:00", 4e9, 90), ("14:30", 9e9, 80)):
+        db3.execute("INSERT INTO snapshots VALUES (?,?,?,0,0,0,?,20000,50e9,0)",
+                    (f"{day}T{hhmm}:00+07:00", "DDD", buy, room))
+    db3.commit()
+    build_day_story(db3, day)
+    assert db3.execute("SELECT net, late_net, room_delta FROM day_story").fetchone() == (9e9, 5e9, -20)
+
+    # _story_line: chi len tieng khi co gi dang noi
+    assert "xả dồn 30' cuối" in _story_line((-100e9, -45e9, 0))
+    assert _story_line((5e9, 1e9, 0)) == ""
+    assert "room -1.2tr" in _story_line((20e9, 1e9, -1_200_000))
     print("selftest OK")
 
 
