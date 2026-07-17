@@ -1,0 +1,41 @@
+from src.domain.entities import TrendStats
+from src.domain.signals import classify_regime, is_accel, spike_share, trend_stats
+
+TH = dict(day_net_th=15e9, rate_th=1e9)
+
+def run():
+    # regime (tu selftest detect_states cu): gom deu -> GOM; delta thu hep -> GOM_CHUNG
+    assert classify_regime(20e9, 10e9, 1.0, **TH) == "GOM"
+    assert classify_regime(20.1e9, 0.1e9, 1.0, **TH) == "GOM_CHUNG"
+    assert classify_regime(-20e9, -10e9, 1.0, **TH) == "XA"
+    assert classify_regime(-20e9, -0.5e9, 1.0, **TH) == "XA_CHUNG"
+    assert classify_regime(5e9, 5e9, 1.0, **TH) == "NEUTRAL"
+    assert classify_regime(8e9, 5e9, 0.5, **TH) == "GOM"      # watchlist: nguong /2
+
+    # spike (tu selftest cu): 5 ty / win 20 ty = share 25% -> spike
+    SP = dict(min_day_value=30e9, min_net=3e9, min_share=0.15)
+    assert abs(spike_share(5e9, 20e9, 120e9, 1.0, **SP) - 0.25) < 1e-9
+    assert spike_share(2e9, 20e9, 120e9, 1.0, **SP) is None    # net < 3 ty
+    assert spike_share(5e9, 40e9, 120e9, 1.0, **SP) is None    # share < 15%
+    assert spike_share(5e9, 20e9, 20e9, 1.0, **SP) is None     # GTGD ngay < 30 ty
+    assert spike_share(5e9, 0, 120e9, 1.0, **SP) is None       # win_value <= 0
+
+    # accel (tu selftest cu): 1.2 -> 2.7 -> 5.0 tang dan, share 25% -> True
+    AC = dict(min_day_value=30e9, min_last=1.5e9, min_share=0.10)
+    assert is_accel(1.2e9, 2.7e9, 5e9, 20e9, 140e9, 1.0, **AC)
+    assert not is_accel(5e9, 2.9e9, 0.9e9, 20e9, 140e9, 1.0, **AC)   # giam toc
+    assert not is_accel(1.2e9, 2.7e9, 5e9, 400e9, 1000e9, 1.0, **AC) # chim trong GTGD
+    assert not is_accel(1.2e9, -2.7e9, 5e9, 20e9, 140e9, 1.0, **AC)  # khac dau
+
+    # trend_stats: 7 ban + 3 mua -> DAO_CHIEU that; outlier 1 phien -> KHONG dao chieu
+    t = trend_stats([-5e9] * 7 + [3e9, 4e9, 6e9])
+    assert isinstance(t, TrendStats)
+    assert t.momo == "DAO_CHIEU" and t.streak == 3 and t.streak_side == "mua"
+    t2 = trend_stats([-50e9] * 7 + [139e9, -13e9, -4e9])       # case HPG 07/2026
+    assert t2.momo != "DAO_CHIEU" and t2.streak == 2 and t2.streak_side == "bán"
+    t3 = trend_stats([-5e9] * 7 + [3e9])
+    assert t3.flipped                                           # vua flip phien cuoi
+    print("test_domain OK")
+
+if __name__ == "__main__":
+    run()
