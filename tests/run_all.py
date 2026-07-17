@@ -1,7 +1,7 @@
 """Chay toan bo test module. Moi task them 1 dong import + goi run()."""
 MODULES = ["tests.test_config", "tests.test_domain", "tests.test_repo", "tests.test_feeds",
           "tests.test_presenters", "tests.test_infra_misc",
-          "tests.test_usecases"]  # cac task sau append: ("tests.test_config", ...)
+          "tests.test_usecases", "tests.test_bot"]  # cac task sau append: ("tests.test_config", ...)
 
 def main():
     import importlib
