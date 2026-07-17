@@ -459,7 +459,8 @@ def run():
     snap(r, f"{day}T10:00:00+07:00", "AAA", 20e9)
     assert r.max_ts() == f"{day}T10:00:00+07:00"
     assert r.prev_snapshot_ts(f"{day}T10:00:00+07:00", 30) == f"{day}T09:30:00+07:00"
-    assert r.prev_snapshot_ts(f"{day}T10:00:00+07:00", 5) is None
+    # semantics goc: "snapshot gan nhat CU >= n phut" — cutoff 09:55 -> MAX(ts) <= cutoff la 09:30
+    assert r.prev_snapshot_ts(f"{day}T10:00:00+07:00", 5) == f"{day}T09:30:00+07:00"
     rows = r.state_rows(f"{day}T10:00:00+07:00", f"{day}T09:30:00+07:00")
     assert rows == [("AAA", 20e9, 10e9, 100e9, 20000, 1.5)], rows
     sp = r.spike_rows(f"{day}T10:00:00+07:00", f"{day}T09:30:00+07:00")

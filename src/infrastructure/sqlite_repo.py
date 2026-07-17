@@ -56,11 +56,7 @@ class SqliteRepo(SnapshotRepo):
 
     def prev_snapshot_ts(self, ts, minutes):
         cutoff = (datetime.fromisoformat(ts) - timedelta(minutes=minutes)).isoformat(timespec="seconds")
-        # ponytail: collector.py dung "<=" (khong chan tren) — dung voi cadence lien tuc thuc
-        # te vi cutoff luon roi dung vao 1 moc snapshot co san. "=" o day giu dung ket qua do
-        # nhung tranh tra ve 1 snapshot cu hon nhieu khi du lieu thua (gap/mat poll) — verbatim
-        # test doi hoi minutes=5 phai None du co snapshot 30' truoc, "<=" se sai o case nay.
-        return self.db.execute("SELECT MAX(ts) FROM snapshots WHERE ts = ? AND ts LIKE ?",
+        return self.db.execute("SELECT MAX(ts) FROM snapshots WHERE ts <= ? AND ts LIKE ?",
                                (cutoff, ts[:10] + "%")).fetchone()[0]
 
     def snapshot_times(self, day, until_ts, n):
