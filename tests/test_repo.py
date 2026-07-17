@@ -27,6 +27,9 @@ def run():
     # watchlist
     r.watch("HPG"); r.watch("HPG"); assert r.watchlist() == {"HPG"}
     r.unwatch("HPG"); assert r.watchlist() == set()
+    # top_net_full (video.py top_mover_rows): net + price + pct cho snapshot ts do
+    snap(r, f"{day}T10:10:00+07:00", "AAA", 25.2e9, day_value=120e9)
+    assert r.top_net_full(f"{day}T10:10:00+07:00") == [("AAA", 25.2e9, 20000, 1.5)]
     # day_story (tu selftest cu: 9 ty cuoi phien, 5 ty sau 14:15, room -20)
     r2 = SqliteRepo(":memory:")
     for hhmm, buy, room in (("09:30", 2e9, 100), ("14:00", 4e9, 90), ("14:30", 9e9, 80)):

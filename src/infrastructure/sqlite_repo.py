@@ -158,6 +158,11 @@ class SqliteRepo(SnapshotRepo):
             "SELECT symbol, buy_val - sell_val AS dn FROM snapshots WHERE ts=? AND ABS(dn) > 1e9 ORDER BY dn DESC",
             (ts,)).fetchall()
 
+    def top_net_full(self, ts):
+        return self.db.execute(
+            "SELECT symbol, buy_val - sell_val AS dn, price, COALESCE(pct, 0) "
+            "FROM snapshots WHERE ts=? AND ABS(dn) > 1e9 ORDER BY dn DESC", (ts,)).fetchall()
+
     def heat(self, ts, n):
         return self.db.execute(
             "SELECT symbol, COALESCE(pct, 0) FROM snapshots WHERE ts=? ORDER BY day_value DESC LIMIT ?",

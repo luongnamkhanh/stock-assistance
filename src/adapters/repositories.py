@@ -56,6 +56,9 @@ class SnapshotRepo(ABC):
     def top_net(self, ts): ...                         # -> [(sym, day_net)] DESC, |net|>1 ty
 
     @abstractmethod
+    def top_net_full(self, ts): ...                    # -> [(sym, day_net, price, pct)] DESC, |net|>1 ty
+
+    @abstractmethod
     def heat(self, ts, n): ...                         # -> [(sym, pct)] theo day_value DESC
 
     @abstractmethod

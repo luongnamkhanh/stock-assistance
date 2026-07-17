@@ -13,7 +13,6 @@ import json
 import math
 import os
 import re
-import sqlite3
 import shutil
 import subprocess
 import sys
@@ -24,8 +23,11 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
-from brief import load_env
-from collector import DB, fetch_foreign_daily, make_script
+from src.config import DB, load_config, load_env
+from src.infrastructure.sqlite_repo import SqliteRepo, SCHEMA
+from src.infrastructure.vndirect_api import VnDirect
+from src.infrastructure.llm import LlmClient
+from src.usecases.make_script import make_script
 
 load_env()
 
@@ -161,7 +163,7 @@ def scene_chart(img, ctx, ts, dur):
     d = ImageDraw.Draw(img)
     d.text((W / 2, 260), "KHỐI NGOẠI 10 PHIÊN (tỷ đồng)",
            font=_font(52), fill=FG, anchor="mm")
-    vals = [(r["netVal"] or 0) / 1e9 for r in ctx["rows"]]
+    vals = [r.net_val / 1e9 for r in ctx["rows"]]
     peak = max(abs(v) for v in vals) or 1
     x0, y_mid, bh = 90, 850, 380
     bw = (W - 180) // len(vals)
@@ -180,7 +182,7 @@ def scene_chart(img, ctx, ts, dur):
             d.rectangle([x + 8, top, x + bw - 8, top + h], outline=FG, width=3)
             d.text((x + bw / 2, top - 44 if v >= 0 else top + h + 44),
                    f"{v:+,.0f}", font=_font(40), fill=FG, anchor="mm")
-        d.text((x + bw / 2, y_mid + bh + 50), ctx["rows"][i]["tradingDate"][8:10],
+        d.text((x + bw / 2, y_mid + bh + 50), ctx["rows"][i].trading_date[8:10],
                font=_font(30, bold=False), fill=mix(BG, DIM, g), anchor="mm")
 
 
@@ -360,23 +362,17 @@ def plan_scenes(hook, than, ket, symbols):
     return segs
 
 
-def top_mover_rows(db, n=3):
+def top_mover_rows(repo, n=3):
     """Top mua/ban rong tu snapshot moi nhat -> ([(sym, net, price, pct)], [...])."""
-    ts = db.execute("SELECT MAX(ts) FROM snapshots").fetchone()[0]
-    rows = db.execute(
-        "SELECT symbol, buy_val - sell_val AS dn, price, COALESCE(pct, 0) "
-        "FROM snapshots WHERE ts=? AND ABS(dn) > 1e9 ORDER BY dn DESC", (ts,)).fetchall()
-    gom = [tuple(r) for r in rows[:n] if r[1] > 0]
-    xa = [tuple(r) for r in rows[::-1][:n] if r[1] < 0]
+    rows = repo.top_net_full(repo.max_ts())
+    gom = [r for r in rows[:n] if r[1] > 0]
+    xa = [r for r in rows[::-1][:n] if r[1] < 0]
     return gom, xa
 
 
-def heatmap_rows(db, n=20):
+def heatmap_rows(repo, n=20):
     """Top n ma theo GTGD ngay, tu snapshot moi nhat -> [(symbol, pct)]."""
-    ts = db.execute("SELECT MAX(ts) FROM snapshots").fetchone()[0]
-    return [tuple(r) for r in db.execute(
-        "SELECT symbol, COALESCE(pct, 0) FROM snapshots WHERE ts=? "
-        "ORDER BY day_value DESC LIMIT ?", (ts, n))]
+    return repo.heat(repo.max_ts(), n)
 
 
 def fetch_index():
@@ -407,27 +403,27 @@ def concat_wavs(paths, out):
                 o.writeframes(w.readframes(w.getnframes()))
 
 
-def build_ctx(db):
-    rows = fetch_foreign_daily("VNINDEX", 10)
-    gom, xa = top_mover_rows(db)
-    return {"net_ty": (rows[-1]["netVal"] or 0) / 1e9, "date": rows[-1]["tradingDate"],
+def build_ctx(repo):
+    rows = VnDirect().foreign_daily("VNINDEX", 10)
+    gom, xa = top_mover_rows(repo)
+    return {"net_ty": rows[-1].net_val / 1e9, "date": rows[-1].trading_date,
             "index": fetch_index(), "rows": rows,
-            "heat": heatmap_rows(db), "gom": gom, "xa": xa}
+            "heat": heatmap_rows(repo), "gom": gom, "xa": xa}
 
 
-def stage_script(db, force=False):
+def stage_script(repo, force=False):
     """Stage 1 — chot script cua ngay (1 lan goi Gemini); da chot thi dung lai."""
     f = day_dir() / "script.txt"
     if f.exists() and not force:
         print("script: dung ban da chot", f)
         return f.read_text()
-    text = make_script(db).split("\n\n", 1)[-1]  # bo header "🎬 ..."
+    text = make_script(repo, VnDirect(), LlmClient()).split("\n\n", 1)[-1]  # bo header "🎬 ..."
     f.write_text(text)
     print("script: chot ban moi", f)
     return text
 
 
-def stage_tts(db, script, force=False):
+def stage_tts(repo, script, force=False):
     """Stage 2 — chot voice: scene plan (segs.json) + TTS tung doan (s{i}.wav).
     Da co du artifact thi dung lai; thieu wav nao (crash giua chung) thi TTS bu."""
     d = day_dir()
@@ -435,7 +431,7 @@ def stage_tts(db, script, force=False):
     if segs_f.exists() and not force:
         segs = [tuple(x) for x in json.loads(segs_f.read_text())]
     else:
-        gom, xa = top_mover_rows(db)
+        gom, xa = top_mover_rows(repo)
         segs = plan_scenes(*split_script(script), [s for s, *_ in gom + xa])
         segs_f.write_text(json.dumps(segs, ensure_ascii=False))
     wavs = []
@@ -447,11 +443,11 @@ def stage_tts(db, script, force=False):
     return segs, wavs
 
 
-def stage_render(db, segs, wavs):
+def stage_render(repo, segs, wavs):
     """Stage 3 — thuan local (PIL + ffmpeg, khong API): lap lai thoai mai khi chinh
     visual/animation, script & voice giu nguyen. Moi lan ra 1 ban render-HHMM.mp4."""
     d = day_dir()
-    ctx = build_ctx(db)
+    ctx = build_ctx(repo)
     ctx["net_ty"] = hook_number(segs[0][1], ctx["net_ty"])  # so tren hinh = so voice doc
     durs = [wav_dur(p) for p in wavs]
     audio = d / "audio.wav"
@@ -485,11 +481,11 @@ def stage_render(db, segs, wavs):
 
 
 def make_video():
-    db = sqlite3.connect(DB)
+    repo = SqliteRepo(DB)
     fresh = "--fresh" in sys.argv  # chot lai script + voice (mac dinh: dung ban da chot)
-    script = stage_script(db, force=fresh)
-    segs, wavs = stage_tts(db, script, force=fresh)
-    return stage_render(db, segs, wavs)
+    script = stage_script(repo, force=fresh)
+    segs, wavs = stage_tts(repo, script, force=fresh)
+    return stage_render(repo, segs, wavs)
 
 
 def frames(video=None):
@@ -523,7 +519,6 @@ def frames(video=None):
 
 
 def send_video(path):
-    from collector import load_config
     cfg = load_config()
     url = f"https://api.telegram.org/bot{cfg['token']}/sendVideo"
     subprocess.run(["curl", "-s", "-F", f"chat_id={cfg['chat_ids'][0]}",
@@ -550,11 +545,12 @@ def render_frame(t, ctx, timeline, karaoke):
 
 def preview():
     """PNG giua moi canh tu data gia — khong can mang/TTS/ffmpeg."""
+    from src.domain.entities import DayFlow
     OUT.mkdir(exist_ok=True)
     ctx = {
         "net_ty": -193, "date": "2026-07-16",
         "index": {"close": 1782.12, "change": -24.51, "pct": -1.36},
-        "rows": [{"tradingDate": f"2026-07-{d:02d}", "netVal": v * 1e9}
+        "rows": [DayFlow(f"2026-07-{d:02d}", v * 1e9)
                  for d, v in zip(range(1, 11),
                                  (120, -80, 200, -350, 90, -60, 150, -500, 300, -193))],
         "heat": list(zip(
@@ -611,21 +607,17 @@ def selftest():
     assert all(a[2] == b[1] for a, b in zip(ks, ks[1:]))
     assert chunks_with_times("", 0, 5) == []
 
-    from collector import SCHEMA
-    db = sqlite3.connect(":memory:")
-    db.executescript(SCHEMA)
+    repo = SqliteRepo(":memory:")
     ts = "2026-01-05T14:00:00+07:00"
     rows = [  # (symbol, buy, sell, day_value, price, pct)
         ("AAA", 9e9, 1e9, 300e9, 20000, 2.5),   # net +8 ty
         ("BBB", 1e9, 6e9, 200e9, 15000, -1.2),  # net -5 ty
         ("CCC", 2e9, 2.5e9, 100e9, 30000, 0.4), # net -0.5 ty -> duoi nguong movers
     ]
-    for s, b, sl, dv, p, pc in rows:
-        db.execute("INSERT INTO snapshots VALUES (?,?,?,?,0,0,1e6,?,?,?)",
-                   (ts, s, b, sl, p, dv, pc))
-    heat = heatmap_rows(db, n=2)
+    repo.insert_snapshots(ts, [(s, b, sl, 0, 0, 1e6, p, dv, pc) for s, b, sl, dv, p, pc in rows])
+    heat = heatmap_rows(repo, n=2)
     assert heat == [("AAA", 2.5), ("BBB", -1.2)], heat  # sap theo day_value
-    gom, xa = top_mover_rows(db)
+    gom, xa = top_mover_rows(repo)
     assert gom == [("AAA", 8e9, 20000, 2.5)], gom
     assert xa == [("BBB", -5e9, 15000, -1.2)], xa
 

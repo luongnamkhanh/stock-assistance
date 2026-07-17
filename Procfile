@@ -1,1 +1,1 @@
-worker: python -u collector.py
+worker: python -u -m src.main

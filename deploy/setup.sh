@@ -3,7 +3,7 @@
 #   sudo bash setup.sh
 set -e
 mkdir -p /opt/stock-bot
-cp collector.py telegram.json /opt/stock-bot/
+rsync -a src tests telegram.json /opt/stock-bot/
 [ -f flows.db ] && cp -n flows.db /opt/stock-bot/ || true   # giu lich su neu co, khong ghi de
 cp stock-bot.service /etc/systemd/system/
 systemctl daemon-reload

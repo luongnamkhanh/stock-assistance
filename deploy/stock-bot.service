@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=/opt/stock-bot
-ExecStart=/usr/bin/python3 -u /opt/stock-bot/collector.py
+ExecStart=/usr/bin/python3 -u -m src.main
 Restart=always
 RestartSec=10
 
