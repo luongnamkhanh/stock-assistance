@@ -32,6 +32,7 @@ Usage:
 import json
 import os
 import sqlite3
+import statistics
 import sys
 import time
 import urllib.request
@@ -440,7 +441,26 @@ def fetch_foreign_daily(code, n=10):
         return list(reversed(json.load(r)["data"]))  # oldest -> newest
 
 
-def format_trend(label, rows):
+def fetch_price_line(code, n=10):
+    """Dong gia kem trend (loi API -> chuoi rong, khong chan message chinh)."""
+    ep = "vnmarket_prices" if code == "VNINDEX" else "stock_prices"
+    url = (f"https://api-finfo.vndirect.com.vn/v4/{ep}"
+           f"?q=code:{code}&size={n}&sort=date:desc&fields=date,close")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            closes = [row["close"] for row in reversed(json.load(r)["data"])]  # cu -> moi
+    except Exception:
+        return ""
+    if not closes:
+        return ""
+    d1 = (closes[-1] / closes[-2] - 1) * 100 if len(closes) > 1 else 0.0
+    dn = (closes[-1] / closes[0] - 1) * 100
+    gia = f"{closes[-1]:,.1f} điểm" if code == "VNINDEX" else f"{closes[-1]*1000:,.0f}đ"
+    return f"Giá: {gia} | phiên nay {d1:+.1f}% | {len(closes)} phiên {dn:+.1f}%"
+
+
+def format_trend(label, rows, price=""):
     if not rows:
         return f"Không có dữ liệu khối ngoại cho {label}."
     nets = [r["netVal"] or 0 for r in rows]
@@ -450,7 +470,8 @@ def format_trend(label, rows):
     a3 = sum(last3) / len(last3)
     rest = nets[:-3] or [0]
     a_rest = sum(rest) / len(rest)
-    if cum != 0 and a3 * cum < 0:
+    # median: 1 phien dot bien (thoa thuan) khong duoc phep tu minh tao nhan dao chieu
+    if cum != 0 and statistics.median(last3) * cum < 0:
         momo = "3 phiên gần nhất ĐẢO CHIỀU so với xu hướng"
     elif abs(a3) > 1.5 * abs(a_rest):
         momo = "đà đang MẠNH dần"
@@ -480,13 +501,15 @@ def format_trend(label, rows):
         read = f"vẫn {streak_side} ròng nhưng lực đang hạ nhiệt"
     else:
         read = f"xu hướng {streak_side} ròng, cường độ bình thường"
+    bd = ", ".join(f"{v/1e9:+,.0f}" for v in last3)  # bay outlier ngay tren mat chu
     return (f"📈 Khối ngoại {label} — {len(rows)} phiên ({rows[0]['tradingDate'][5:]} → {rows[-1]['tradingDate'][5:]})\n"
             f"{bars}  (cũ → mới)\n"
             f"Xu hướng: {side} lũy kế {cum/1e9:+,.0f} tỷ | {buys}/{len(rows)} phiên mua ròng\n"
             f"Chuỗi hiện tại: {streak} phiên {streak_side} ròng liên tiếp{flip}\n"
-            f"3 phiên gần nhất: {sum(last3)/1e9:+,.0f} tỷ — {momo}\n"
+            f"3 phiên gần nhất: {sum(last3)/1e9:+,.0f} tỷ ({bd}) — {momo}\n"
             f"Phiên mới nhất ({rows[-1]['tradingDate']}): {nets[-1]/1e9:+,.0f} tỷ\n"
-            f"💡 Đọc nhanh: {read}")
+            + (f"{price}\n" if price else "")
+            + f"💡 Đọc nhanh: {read}")
 
 
 def top_movers(db):
@@ -564,9 +587,10 @@ def poll_commands(db, wait=25):
         elif cmd == "/TREND":
             try:
                 if arg:
-                    msg = format_trend(arg, fetch_foreign_daily(arg))
+                    msg = format_trend(arg, fetch_foreign_daily(arg), fetch_price_line(arg))
                 else:
-                    msg = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
+                    msg = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX"),
+                                       fetch_price_line("VNINDEX")) + top_movers(db)
             except Exception as e:
                 msg = f"Không lấy được dữ liệu xu hướng ({e})"
             send_to(cfg["token"], chat_id, msg)
@@ -597,7 +621,8 @@ def make_script(db):
     saved = db.execute("SELECT v FROM meta WHERE k=?", (key,)).fetchone()
     if saved:
         return saved[0]
-    data = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
+    data = format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX"),
+                        fetch_price_line("VNINDEX")) + top_movers(db)
     ts = db.execute("SELECT MAX(ts) FROM snapshots").fetchone()[0]
     if ts:  # % gia nhom GTGD lon — de script co the ke ve sac xanh/do (canh heatmap)
         heat = db.execute("SELECT symbol, COALESCE(pct, 0) FROM snapshots WHERE ts=? "
@@ -624,7 +649,8 @@ def maybe_send_summary(db):
         return  # khong co du lieu hom nay (nghi le) -> khong tong ket
     try:
         build_day_story(db, today)  # chot dac tinh phien de lam giau alert cac ngay sau
-        text = "🔔 Tổng kết phiên\n\n" + format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX")) + top_movers(db)
+        text = ("🔔 Tổng kết phiên\n\n" + format_trend("toàn HOSE", fetch_foreign_daily("VNINDEX"),
+                                                       fetch_price_line("VNINDEX")) + top_movers(db))
         send_telegram(text)
         db.execute("INSERT OR REPLACE INTO meta VALUES ('summary_day', ?)", (today,))
         db.commit()
@@ -688,8 +714,16 @@ def selftest():
             for i, v in enumerate([-5e9] * 7 + [3e9, 4e9, 6e9])]
     msg = format_trend("TEST", rows)
     assert "3 phiên mua ròng liên tiếp" in msg and "🟥" * 7 + "🟩" * 3 in msg, msg
+    assert "ĐẢO CHIỀU" in msg and "(+3, +4, +6)" in msg, msg  # 3 phien cung chieu = dao chieu that
     rows2 = rows[:8]  # phien cuoi vua flip
     assert "ĐẢO CHIỀU" in format_trend("TEST", rows2)
+    # 1 phien mua dot bien giua chuoi ban (case HPG 07/2026): breakdown lo outlier,
+    # median chan nhan "DAO CHIEU", dong gia chi hien khi duoc truyen vao
+    rows3 = [{"tradingDate": f"2026-02-{i+1:02d}", "netVal": v}
+             for i, v in enumerate([-50e9] * 7 + [139e9, -13e9, -4e9])]
+    m3 = format_trend("TEST", rows3, "Giá: 22,200đ | phiên nay +0.0%")
+    assert "ĐẢO CHIỀU" not in m3 and "(+139, -13, -4)" in m3 and "Giá: 22,200đ" in m3, m3
+    assert "Giá:" not in format_trend("TEST", rows3), "no price line unless provided"
 
     # _vps_row: field string, gia tri nghin dong x1000 = VND, lot theo lo 10,
     # pct phai co DAU tinh tu tham chieu r (changePc cua VPS khong co dau)
