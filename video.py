@@ -24,7 +24,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from src.config import DB, load_config, load_env
-from src.infrastructure.sqlite_repo import SqliteRepo, SCHEMA
+from src.infrastructure.sqlite_repo import SqliteRepo
 from src.infrastructure.vndirect_api import VnDirect
 from src.infrastructure.llm import LlmClient
 from src.usecases.make_script import make_script

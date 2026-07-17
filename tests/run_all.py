@@ -1,7 +1,7 @@
-"""Chay toan bo test module. Moi task them 1 dong import + goi run()."""
+"""Chay toan bo test module (8 module, danh sach da day du)."""
 MODULES = ["tests.test_config", "tests.test_domain", "tests.test_repo", "tests.test_feeds",
-          "tests.test_presenters", "tests.test_infra_misc",
-          "tests.test_usecases", "tests.test_bot"]  # cac task sau append: ("tests.test_config", ...)
+           "tests.test_presenters", "tests.test_infra_misc",
+           "tests.test_usecases", "tests.test_bot"]
 
 def main():
     import importlib
