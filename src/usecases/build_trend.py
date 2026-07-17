@@ -20,7 +20,10 @@ def trend_ctx(sym, repo, flows):
 
 
 def trend_message(code, label, repo, flows, movers=False):
-    text = presenters.format_trend(label, flows.foreign_daily(code), presenters.price_line(code, flows.closes(code)))
+    closes, highs, lows = flows.ohlc(code)
+    price = "\n".join(x for x in (presenters.price_line(code, closes[-10:]),
+                                  presenters.range_line(code, closes, highs, lows)) if x)
+    text = presenters.format_trend(label, flows.foreign_daily(code), price)
     if movers:
         ts = repo.max_ts()
         if ts:

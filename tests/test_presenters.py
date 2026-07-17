@@ -1,6 +1,7 @@
 from src.domain.entities import Accel, DayFlow, Spike
 from src.adapters.presenters import (accel_msg, ctx_line, format_trend, price_line,
-                                     spike_msg, story_line, top_movers_text, trend_ctx_line)
+                                     range_line, spike_msg, story_line, top_movers_text,
+                                     trend_ctx_line)
 
 def flows(vals, month="01"):
     return [DayFlow(f"2026-{month}-{i+1:02d}", v) for i, v in enumerate(vals)]
@@ -40,6 +41,17 @@ def run():
     t = top_movers_text([("AAA", 8e9), ("BBB", -5e9)])
     assert "Top gom hôm nay: AAA +8 tỷ" in t and "Top xả hôm nay: BBB -5 tỷ" in t, t
     assert top_movers_text([]) == ""
+
+    # bien 4 tuan: dinh/day 20 phien + vi tri gia — co phieu don vi dong, index don vi diem
+    closes = [22.0] * 19 + [22.2]
+    highs = [22.5] * 19 + [23.9]     # dinh 23,900
+    lows = [21.6] + [21.9] * 19      # day 21,600
+    r = range_line("HPG", closes, highs, lows)
+    assert "21,600 – 23,900" in r and "cách đáy +2.8%" in r and "cách đỉnh -7.1%" in r, r
+    ri = range_line("VNINDEX", [1790.0] * 20, [1810.5] * 20, [1750.2] * 20)
+    assert "1,750.2 – 1,810.5 điểm" in ri, ri
+    assert range_line("HPG", [], [], []) == ""
+    assert range_line("HPG", [22.0] * 5, [22.5] * 5, [21.5] * 5) == "", "du lieu mong -> khong ve hop"
     print("test_presenters OK")
 
 if __name__ == "__main__":

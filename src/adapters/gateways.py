@@ -13,7 +13,7 @@ class FlowHistory(ABC):
     def foreign_daily(self, code, n=10): ...   # -> list[DayFlow] cu -> moi
 
     @abstractmethod
-    def closes(self, code, n=10): ...          # -> list[float] cu -> moi ([] neu loi)
+    def ohlc(self, code, n=20): ...            # -> (closes, highs, lows) cu -> moi (([], [], []) neu loi)
 
 
 class LLM(ABC):

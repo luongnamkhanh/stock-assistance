@@ -5,8 +5,8 @@ from src.usecases.day_story import build_day_story
 class NoFlows:                       # FlowHistory cam: trend_ctx -> "" nhu khi API loi
     def foreign_daily(self, code, n=10):
         raise RuntimeError("offline")
-    def closes(self, code, n=10):
-        return []
+    def ohlc(self, code, n=20):
+        return ([], [], [])
 
 def snap(r, ts, sym, buy, sell=0, dv=100e9, price=20000, pct=1.5, room=0):
     r.insert_snapshots(ts, [(sym, buy, sell, 0, 0, room, price, dv, pct)])

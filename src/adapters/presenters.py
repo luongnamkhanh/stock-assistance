@@ -139,6 +139,21 @@ def price_line(code, closes):
     return f"Giá: {gia} | phiên nay {d1:+.1f}% | {len(closes)} phiên {dn:+.1f}%"
 
 
+def range_line(code, closes, highs, lows):
+    """Dinh/day 4 tuan + vi tri gia hien tai — fact thuan, khong goi la ho tro/khang cu.
+    Du lieu < 15 phien -> "" (khong ve hop lech tu mau thieu)."""
+    if len(closes) < 15:
+        return ""
+    top, bot, last = max(highs), min(lows), closes[-1]
+    d_bot = (last / bot - 1) * 100
+    d_top = (last / top - 1) * 100
+    if code == "VNINDEX":
+        rng = f"{bot:,.1f} – {top:,.1f} điểm"
+    else:
+        rng = f"{bot*1000:,.0f} – {top*1000:,.0f}"
+    return f"Biên 4 tuần: {rng} | cách đáy {d_bot:+.1f}%, cách đỉnh {d_top:+.1f}%"
+
+
 def top_movers_text(rows):
     if not rows:
         return ""

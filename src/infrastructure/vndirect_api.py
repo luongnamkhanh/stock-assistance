@@ -55,13 +55,14 @@ class VnDirect(FlowHistory):
             rows = list(reversed(json.load(r)["data"]))  # oldest -> newest
         return [DayFlow(trading_date=r["tradingDate"], net_val=r["netVal"] or 0) for r in rows]
 
-    def closes(self, code, n=10):
-        """Gia dong cua, cu -> moi. Loi/rong -> []."""
+    def ohlc(self, code, n=20):
+        """(closes, highs, lows) cu -> moi. Loi/rong -> ([], [], [])."""
         ep = "vnmarket_prices" if code == "VNINDEX" else "stock_prices"
-        url = f"{VND}/{ep}?q=code:{code}&size={n}&sort=date:desc&fields=date,close"
+        url = f"{VND}/{ep}?q=code:{code}&size={n}&sort=date:desc&fields=date,close,high,low"
         try:
             req = urllib.request.Request(url, headers=HEADERS)
             with urllib.request.urlopen(req, timeout=20) as r:
-                return [row["close"] for row in reversed(json.load(r)["data"])]
+                rows = list(reversed(json.load(r)["data"]))
+            return ([r["close"] for r in rows], [r["high"] for r in rows], [r["low"] for r in rows])
         except Exception:
-            return []
+            return ([], [], [])
