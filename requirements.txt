@@ -1,2 +1,2 @@
-# collector.py chi dung stdlib — file nay ton tai de Railway/Nixpacks nhan dien project Python
+# core (src/) chi dung stdlib — file nay ton tai de Railway/Nixpacks nhan dien project Python
 anthropic

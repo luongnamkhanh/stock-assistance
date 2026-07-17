@@ -17,7 +17,7 @@ def maybe_send_summary(repo, flows, llm, tg):
         return  # khong co du lieu hom nay (nghi le) -> khong tong ket
     try:
         build_day_story(repo, today)  # chot dac tinh phien de lam giau alert cac ngay sau
-        text = "🔔 Tổng kết phiên\n\n" + trend_message("VNINDEX", "toàn HOSE", repo, flows)
+        text = "🔔 Tổng kết phiên\n\n" + trend_message("VNINDEX", "toàn HOSE", repo, flows, movers=True)
         tg.broadcast(text)
         repo.set_meta("summary_day", today)
     except Exception as e:

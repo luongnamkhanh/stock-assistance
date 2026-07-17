@@ -19,9 +19,9 @@ def trend_ctx(sym, repo, flows):
         return ""
 
 
-def trend_message(code, label, repo, flows):
+def trend_message(code, label, repo, flows, movers=False):
     text = presenters.format_trend(label, flows.foreign_daily(code), presenters.price_line(code, flows.closes(code)))
-    if code == "VNINDEX":
+    if movers:
         ts = repo.max_ts()
         if ts:
             text += presenters.top_movers_text(repo.top_net(ts))

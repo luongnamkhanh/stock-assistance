@@ -23,7 +23,7 @@ def make_script(repo, flows, llm):
     saved = repo.get_meta(key)
     if saved:
         return saved
-    data = trend_message("VNINDEX", "toàn HOSE", repo, flows)
+    data = trend_message("VNINDEX", "toàn HOSE", repo, flows, movers=True)
     ts = repo.max_ts()
     if ts:  # % gia nhom GTGD lon — de script co the ke ve sac xanh/do (canh heatmap)
         heat = repo.heat(ts, 8)

@@ -47,7 +47,7 @@ def handle_updates(repo, tg, flows, llm, wait=25):
                 if arg:
                     msg = trend_message(arg, arg, repo, flows)
                 else:
-                    msg = trend_message("VNINDEX", "toàn HOSE", repo, flows)
+                    msg = trend_message("VNINDEX", "toàn HOSE", repo, flows, movers=True)
             except Exception as e:
                 msg = f"Không lấy được dữ liệu xu hướng ({e})"
             tg.send_to(chat_id, msg)
