@@ -29,6 +29,7 @@ def is_accel(d1, d2, d3, win3, day_value, factor, min_day_value, min_last, min_s
 
 
 def trend_stats(nets):
+    """Phan tich chuoi phien. Precondition: nets khong rong — caller (presenter) guard truoc."""
     cum, buys = sum(nets), sum(v > 0 for v in nets)
     last3 = tuple(nets[-3:])
     a3 = sum(last3) / len(last3)
