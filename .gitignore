@@ -11,3 +11,4 @@ video_out/
 .DS_Store
 *.mp3
 *.wav
+export/

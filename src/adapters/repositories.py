@@ -65,7 +65,10 @@ class SnapshotRepo(ABC):
     def has_snapshots(self, day): ...                  # -> bool
 
     @abstractmethod
-    def save_fund_holdings(self, month, rows): ...     # rows: [(fund, symbol, pct, industry)] — thay ca thang
+    def save_fund_month(self, month, holdings, assets, industries, snapshots): ...  # thay tron 1 thang, 4 bang
+
+    @abstractmethod
+    def has_fund_month(self, month): ...               # -> bool: thang do da chup day du chua
 
     @abstractmethod
     def fund_months(self): ...                         # -> list[str 'YYYY-MM'] tang dan

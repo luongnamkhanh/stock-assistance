@@ -5,13 +5,17 @@ from src.infrastructure import fmarket_api
 
 
 def pull_holdings(repo, month):
-    """Keo top 10 khoan cua moi quy co phieu, luu tron goi (loi giua chung -> khong ghi gi)."""
-    rows = []
+    """Keo chi tiet moi quy co phieu (top 10 khoan + phan bo + NAV), luu tron goi 4 bang."""
+    holdings, assets, industries, snaps = [], [], [], []
     funds = fmarket_api.stock_funds()
-    for fid, name in funds:
-        rows += [(name, sym, pct, ind) for sym, pct, ind in fmarket_api.fund_holdings(fid)]
-    repo.save_fund_holdings(month, rows)
-    return len(funds), len(rows)
+    for fid, name, owner in funds:
+        d = fmarket_api.fund_detail(fid)
+        holdings += [(name, *h) for h in d["holdings"]]
+        assets += [(name, *a) for a in d["assets"]]
+        industries += [(name, *i) for i in d["industries"]]
+        snaps.append((name, owner, d["report_month"], d["nav"], *d["nav_chg"]))
+    repo.save_fund_month(month, holdings, assets, industries, snaps)
+    return len(funds), len(holdings)
 
 
 def fund_data(repo):
@@ -43,12 +47,11 @@ def maybe_pull_funds(repo, tg):
     now = now_vn()
     month, today = now.strftime("%Y-%m"), now.date().isoformat()
     if (now.day < 15 or in_trading_hours(now)
-            or repo.get_meta("fund_month") == month or repo.get_meta("fund_try") == today):
+            or repo.has_fund_month(month) or repo.get_meta("fund_try") == today):
         return
     repo.set_meta("fund_try", today)
     try:
         n_funds, n_rows = pull_holdings(repo, month)
-        repo.set_meta("fund_month", month)
         print(f"[{now.isoformat(timespec='seconds')}] fund holdings {month}: {n_funds} quy, {n_rows} dong")
         data = fund_data(repo)
         if data and tg.cfg.get("chat_ids"):  # chi gui kenh duyet — bro tu forward neu ung

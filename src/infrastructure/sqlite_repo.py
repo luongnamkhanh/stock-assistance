@@ -38,6 +38,22 @@ CREATE TABLE IF NOT EXISTS fund_holdings (  -- top 10 khoan/quy tu Fmarket, chup
     industry TEXT,
     PRIMARY KEY (month, fund, symbol)
 );
+CREATE TABLE IF NOT EXISTS fund_assets (     -- phan bo tai san cua quy (Co phieu/Tien/...)
+    month TEXT NOT NULL, fund TEXT NOT NULL, asset TEXT NOT NULL, pct REAL,
+    PRIMARY KEY (month, fund, asset)
+);
+CREATE TABLE IF NOT EXISTS fund_industries ( -- phan bo nganh cua quy
+    month TEXT NOT NULL, fund TEXT NOT NULL, industry TEXT NOT NULL, pct REAL,
+    PRIMARY KEY (month, fund, industry)
+);
+CREATE TABLE IF NOT EXISTS fund_snapshot (   -- 1 dong/quy/thang: NAV + hieu suat + thang bao cao
+    month TEXT NOT NULL, fund TEXT NOT NULL,
+    owner TEXT,            -- cong ty quan ly quy
+    report_month TEXT,     -- thang bao cao danh muc thuc te (thuong som hon month 1 thang)
+    nav REAL,              -- gia 1 ccq
+    nav_1m REAL, nav_3m REAL, nav_6m REAL, nav_12m REAL, nav_36m REAL,  -- % thay doi NAV
+    PRIMARY KEY (month, fund)
+);
 """
 
 
@@ -182,12 +198,26 @@ class SqliteRepo(SnapshotRepo):
         return self.db.execute("SELECT 1 FROM snapshots WHERE ts >= ? AND ts < ? LIMIT 1",
                                (day, day + "~")).fetchone() is not None
 
-    def save_fund_holdings(self, month, rows):
-        """rows: [(fund, symbol, pct, industry)] — thay toan bo du lieu cua thang do."""
-        self.db.execute("DELETE FROM fund_holdings WHERE month=?", (month,))
-        self.db.executemany("INSERT INTO fund_holdings VALUES (?,?,?,?,?)",
-                            [(month, *r) for r in rows])
+    def save_fund_month(self, month, holdings, assets, industries, snapshots):
+        """Thay tron du lieu quy cua 1 thang (1 transaction — loi giua chung khong ghi gi).
+        holdings [(fund,sym,pct,industry)], assets [(fund,asset,pct)],
+        industries [(fund,industry,pct)], snapshots [(fund,owner,report_month,nav,n1,n3,n6,n12,n36)]."""
+        for t in ("fund_holdings", "fund_assets", "fund_industries", "fund_snapshot"):
+            self.db.execute(f"DELETE FROM {t} WHERE month=?", (month,))
+        self.db.executemany("INSERT OR REPLACE INTO fund_holdings VALUES (?,?,?,?,?)",
+                            [(month, *r) for r in holdings])
+        self.db.executemany("INSERT OR REPLACE INTO fund_assets VALUES (?,?,?,?)",
+                            [(month, *r) for r in assets])
+        self.db.executemany("INSERT OR REPLACE INTO fund_industries VALUES (?,?,?,?)",
+                            [(month, *r) for r in industries])
+        self.db.executemany("INSERT OR REPLACE INTO fund_snapshot VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            [(month, *r) for r in snapshots])
         self.db.commit()
+
+    def has_fund_month(self, month):
+        """Thang do da chup DAY DU chua (fund_snapshot la bang chi co o ban pull moi)."""
+        return self.db.execute("SELECT 1 FROM fund_snapshot WHERE month=? LIMIT 1",
+                               (month,)).fetchone() is not None
 
     def fund_months(self):
         return [r[0] for r in self.db.execute("SELECT DISTINCT month FROM fund_holdings ORDER BY month")]

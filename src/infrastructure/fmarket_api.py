@@ -10,13 +10,28 @@ _FILTER = {"types": ["NEW_FUND", "TRADING_FUND"], "issuerIds": [], "sortOrder": 
 
 
 def stock_funds():
-    """[(id, shortName)] cac quy co phieu dang giao dich tren Fmarket."""
+    """[(id, shortName, ten_cty_quan_ly)] cac quy co phieu dang giao dich tren Fmarket."""
     rows = http_json(f"{API}/filter", timeout=30, body=_FILTER)["data"]["rows"]
-    return [(r["id"], r["shortName"]) for r in rows]
+    return [(r["id"], r["shortName"], (r.get("owner") or {}).get("name") or "") for r in rows]
 
 
-def fund_holdings(fund_id):
-    """[(symbol, pct_nav, industry)] top 10 khoan nam giu cua 1 quy."""
-    d = http_json(f"{API}/{fund_id}", timeout=30)["data"]
-    return [(h["stockCode"], h.get("netAssetPercent") or 0, h.get("industry") or "")
-            for h in d.get("productTopHoldingList") or [] if h.get("stockCode")]
+def fund_detail(fund_id):
+    return _parse(http_json(f"{API}/{fund_id}", timeout=30)["data"])
+
+
+def _parse(d):
+    """Detail JSON -> dict: holdings/assets/industries + report_month + nav + nav_chg.
+    Tach rieng de test khong can mang."""
+    nc = d.get("productNavChange") or {}
+    rp = (d.get("productFund") or {}).get("updateAssetHoldingTime") or ""  # "06/2026"
+    return {
+        "holdings": [(h["stockCode"], h.get("netAssetPercent") or 0, h.get("industry") or "")
+                     for h in d.get("productTopHoldingList") or [] if h.get("stockCode")],
+        "assets": [(((a.get("assetType") or {}).get("name") or "?"), a.get("assetPercent") or 0)
+                   for a in d.get("productAssetHoldingList") or []],
+        "industries": [((i.get("industry") or "?"), i.get("assetPercent") or 0)
+                       for i in d.get("productIndustriesHoldingList") or []],
+        "report_month": "-".join(reversed(rp.split("/"))) if "/" in rp else None,  # -> "2026-06"
+        "nav": d.get("nav"),
+        "nav_chg": tuple(nc.get(f"navTo{m}Months") for m in (1, 3, 6, 12, 36)),
+    }
