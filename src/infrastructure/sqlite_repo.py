@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS day_story (   -- dac tinh tung phien, chot luc tong k
 );
 CREATE TABLE IF NOT EXISTS watchlist (symbol TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS fund_holdings (  -- top 10 khoan/quy tu Fmarket, chup 1 lan/thang
+    month TEXT NOT NULL,    -- 'YYYY-MM' thang chup
+    fund TEXT NOT NULL,     -- shortName quy
+    symbol TEXT NOT NULL,
+    pct REAL,               -- % NAV
+    industry TEXT,
+    PRIMARY KEY (month, fund, symbol)
+);
 """
 
 
@@ -173,6 +181,27 @@ class SqliteRepo(SnapshotRepo):
     def has_snapshots(self, day):
         return self.db.execute("SELECT 1 FROM snapshots WHERE ts >= ? AND ts < ? LIMIT 1",
                                (day, day + "~")).fetchone() is not None
+
+    def save_fund_holdings(self, month, rows):
+        """rows: [(fund, symbol, pct, industry)] — thay toan bo du lieu cua thang do."""
+        self.db.execute("DELETE FROM fund_holdings WHERE month=?", (month,))
+        self.db.executemany("INSERT INTO fund_holdings VALUES (?,?,?,?,?)",
+                            [(month, *r) for r in rows])
+        self.db.commit()
+
+    def fund_months(self):
+        return [r[0] for r in self.db.execute("SELECT DISTINCT month FROM fund_holdings ORDER BY month")]
+
+    def fund_consensus(self, month):
+        """[(symbol, so_quy_nam, tong_pct)] DESC theo so quy."""
+        return self.db.execute(
+            "SELECT symbol, COUNT(*) AS n, SUM(pct) FROM fund_holdings WHERE month=? "
+            "GROUP BY symbol ORDER BY n DESC, SUM(pct) DESC", (month,)).fetchall()
+
+    def funds_holding(self, symbol, month):
+        return self.db.execute(
+            "SELECT fund, pct FROM fund_holdings WHERE month=? AND symbol=? ORDER BY pct DESC",
+            (month, symbol)).fetchall()
 
     def get_meta(self, k, default=None):
         row = self.db.execute("SELECT v FROM meta WHERE k=?", (k,)).fetchone()

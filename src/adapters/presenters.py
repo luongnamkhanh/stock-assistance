@@ -7,6 +7,8 @@ HELP_TEXT = """📖 Lệnh của bot:
 /trend — xu hướng khối ngoại toàn HOSE 10 phiên gần nhất
 /trend MÃ — xu hướng khối ngoại của 1 mã (vd: /trend HPG)
 /chart — ảnh dashboard khối ngoại phiên gần nhất
+/fund — mã nào đang được nhiều quỹ mở nắm nhất (Fmarket, cập nhật hàng tháng)
+/fund MÃ — quỹ mở nào đang có mã này trong top 10 danh mục
 /brief MÃ — bản tin AI tổng hợp: dòng tiền + định giá + tin tức (~30 giây)
 /script — kịch bản video TikTok từ diễn biến khối ngoại hôm nay
 /watch MÃ — theo dõi mã (ngưỡng alert giảm một nửa)
@@ -160,6 +162,16 @@ def top_movers_text(rows):
     if bot:
         out += f"\nTop xả hôm nay: {bot}"
     return out
+
+
+def fund_stock_text(sym, month, rows):
+    """rows: [(fund, pct)] cac quy dang co sym trong top 10 danh muc."""
+    if not rows:
+        return (f"Không quỹ mở nào (trên Fmarket) có {sym} trong top 10 danh mục tháng {month}.\n"
+                "Lưu ý: quỹ chỉ công bố 10 khoản lớn nhất — không thấy ≠ không nắm.")
+    lines = "\n".join(f"• {f}: {p:.1f}% NAV" for f, p in rows)
+    return (f"🏦 {sym} — trong top 10 danh mục của {len(rows)} quỹ mở (tháng {month}):\n{lines}\n"
+            "(Nguồn: Fmarket, mỗi quỹ chỉ công bố top 10 khoản)")
 
 
 def script_msg(text):

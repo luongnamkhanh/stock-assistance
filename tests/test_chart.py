@@ -20,6 +20,14 @@ def run():
     # du lieu thieu (API loi / DB moi): van ra anh, khong crash
     png2 = daily_png({**ctx, "index": None, "rows": [], "gom": [], "xa": []})
     assert png2[:4] == b"\x89PNG"
+
+    from src.adapters.chart import fund_png
+    fd = {"month": "2026-07",
+          "rows": [("MWG", 24, 2), ("FPT", 20, -1), ("ACB", 18, None), ("HPG", 12, 0)],
+          "new": ["VIX"], "out": ["PNJ", "DGC"]}
+    fp = fund_png(fd)
+    assert fp[:4] == b"\x89PNG" and len(fp) > 15_000, len(fp)
+    assert fund_png({"month": "2026-07", "rows": [], "new": [], "out": []})[:4] == b"\x89PNG"
     print("test_chart OK")
 
 

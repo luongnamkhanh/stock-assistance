@@ -4,6 +4,7 @@ import time
 from src.adapters import chart, presenters
 from src.usecases.build_brief import build_brief
 from src.usecases.build_trend import market_snapshot, trend_message
+from src.usecases.funds import fund_data, fund_stock_message
 from src.usecases.make_script import make_script
 
 
@@ -55,6 +56,19 @@ def handle_updates(repo, tg, flows, llm, wait=25):
             except Exception as e:
                 msg = f"Không tạo được script ({e})"
             tg.send_to(chat_id, msg)
+        elif cmd == "/FUND":
+            try:
+                if arg:
+                    tg.send_to(chat_id, fund_stock_message(arg, repo))
+                else:
+                    data = fund_data(repo)
+                    if data:
+                        tg.send_photo(chat_id, chart.fund_png(data),
+                                      f"🏦 Quỹ mở đồng thuận tháng {data['month'][5:]}/{data['month'][:4]}")
+                    else:
+                        tg.send_to(chat_id, "Chưa có dữ liệu quỹ (bot chụp danh mục Fmarket từ ngày 15 hàng tháng).")
+            except Exception as e:
+                tg.send_to(chat_id, f"Không lấy được dữ liệu quỹ ({e})")
         elif cmd == "/CHART":
             try:
                 ctx = market_snapshot(repo, flows)

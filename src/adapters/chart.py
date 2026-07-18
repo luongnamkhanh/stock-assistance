@@ -82,6 +82,46 @@ def _movers(d, gom, xa):
             y += 56
 
 
+def fund_png(data):
+    """data (tu funds.fund_data): month, rows[(sym, so_quy, delta|None)], new, out
+    -> PNG bytes 1080x1350."""
+    from PIL import ImageDraw
+    img = _bg()
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 100), "QUỸ MỞ ĐỒNG THUẬN", font=_font(58), fill=FG, anchor="mm")
+    d.text((W / 2, 170), f"Tháng {data['month'][5:]}/{data['month'][:4]} — nguồn Fmarket (top 10 khoản mỗi quỹ)",
+           font=_font(28, bold=False), fill=DIM, anchor="mm")
+    d.text((W / 2, 232), "Số quỹ mở đang nắm mỗi mã trong top danh mục",
+           font=_font(30, bold=False), fill=DIM, anchor="mm")
+    rows = data["rows"]
+    if not rows:
+        d.text((W / 2, 700), "(chưa có dữ liệu)", font=_font(32, bold=False), fill=DIM, anchor="mm")
+    else:
+        peak = rows[0][1] or 1
+        y = 330
+        for sym, n, delta in rows:
+            w = int(lerp(140, 620, n / peak))
+            d.rounded_rectangle([260, y - 28, 260 + w, y + 28], radius=12, fill=mix(BG, GREEN, 0.45))
+            d.text((110, y), sym, font=_font(44), fill=FG, anchor="lm")
+            d.text((278, y), f"{n} quỹ", font=_font(34), fill=FG, anchor="lm")
+            if delta:
+                up = delta > 0
+                d.text((950, y), f"{'▲' if up else '▼'}{abs(delta)}", font=_font(36),
+                       fill=GREEN if up else RED, anchor="mm")
+            y += 82
+    if data["new"]:
+        d.text((W / 2, 1160), "Mới vào top: " + ", ".join(data["new"]),
+               font=_font(30), fill=GREEN, anchor="mm")
+    if data["out"]:
+        d.text((W / 2, 1215), "Rời top: " + ", ".join(data["out"]),
+               font=_font(30), fill=RED, anchor="mm")
+    d.text((W / 2, 1312), "Thông tin tham khảo — không phải khuyến nghị đầu tư",
+           font=_font(24, bold=False), fill=DIM, anchor="mm")
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
 def daily_png(ctx):
     """ctx (tu build_trend.market_snapshot): date, net_ty, index|None, rows, gom, xa
     -> PNG bytes 1080x1350."""

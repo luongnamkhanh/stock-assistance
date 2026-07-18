@@ -65,6 +65,18 @@ class SnapshotRepo(ABC):
     def has_snapshots(self, day): ...                  # -> bool
 
     @abstractmethod
+    def save_fund_holdings(self, month, rows): ...     # rows: [(fund, symbol, pct, industry)] — thay ca thang
+
+    @abstractmethod
+    def fund_months(self): ...                         # -> list[str 'YYYY-MM'] tang dan
+
+    @abstractmethod
+    def fund_consensus(self, month): ...               # -> [(symbol, so_quy, tong_pct)] DESC
+
+    @abstractmethod
+    def funds_holding(self, symbol, month): ...        # -> [(fund, pct)] DESC theo pct
+
+    @abstractmethod
     def get_meta(self, k, default=None): ...
 
     @abstractmethod

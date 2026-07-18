@@ -10,5 +10,10 @@ def http_get(url, headers=HEADERS, timeout=25):
     return urllib.request.urlopen(req, timeout=timeout).read()
 
 
-def http_json(url, headers=HEADERS, timeout=25):
-    return json.loads(http_get(url, headers, timeout))
+def http_json(url, headers=HEADERS, timeout=25, body=None):
+    """GET (body=None) hoac POST JSON (body=dict)."""
+    if body is None:
+        return json.loads(http_get(url, headers, timeout))
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={**headers, "Content-Type": "application/json"})
+    return json.load(urllib.request.urlopen(req, timeout=timeout))
