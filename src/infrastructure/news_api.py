@@ -1,19 +1,13 @@
-"""Tin tuc lien quan 1 ma tu Google News RSS (brief.py:101-110)."""
+"""Tin tuc lien quan 1 ma tu Google News RSS."""
 import urllib.parse
-import urllib.request
 import xml.etree.ElementTree as ET
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
-
-
-def _get(url):
-    req = urllib.request.Request(url, headers=HEADERS)
-    return urllib.request.urlopen(req, timeout=25).read()
+from src.infrastructure.http import http_get
 
 
 def fetch_news(sym, n=6):
     q = urllib.parse.quote(f'"{sym}" cổ phiếu')
-    raw = _get(f"https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi")
+    raw = http_get(f"https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi")
     items = ET.fromstring(raw).findall(".//item")[:n]
     lines = []
     for i, it in enumerate(items, 1):

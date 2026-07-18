@@ -18,6 +18,11 @@ RATE_TH = 1e9              # state: |net 30'| < 1 ty => coi nhu chung lai
 WL_FACTOR = 0.5            # watchlist: nguong spike & state nhan he so nay
 ACCEL_MIN_LAST = 1.5e9     # accel: nhip cuoi >= 1.5 ty (nua nguong spike — tin hieu som)
 ACCEL_MIN_SHARE = 0.10     # accel: nhip cuoi phai chiem >= 10% GTGD cua ma trong nhip do
+MOVERS_MIN_NET = 1e9       # top movers: |net rong ngay| > 1 ty moi vao bang
+LATE_SESSION_START = "14:15:00"  # day_story: late_net = net tu moc nay ("30' cuoi phien")
+STORY_MIN_NET = 10e9       # story_line: |net ca phien| >= 10 ty moi dang noi
+STORY_LATE_SHARE = 0.4     # story_line: 30' cuoi chiem >= 40% net ca phien -> "don cuoi phien"
+STORY_ROOM_MIN = 500_000   # story_line: |room delta| >= 0.5tr cp moi nhac  # ponytail: nguong tho, chinh khi thay keu nhieu/it qua
 DB = Path(os.environ.get("DB_PATH", str(ROOT / "flows.db")))
 CONFIG = ROOT / "telegram.json"  # {"token": ..., "chat_id": ...} — keep private
 VN_TZ = timezone(timedelta(hours=7))

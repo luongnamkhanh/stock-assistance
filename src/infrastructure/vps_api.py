@@ -1,6 +1,5 @@
-"""Nguon du phong khi SSI iBoard chan IP datacenter — VPS feed (collector.py:161-201)."""
-import json
-import urllib.request
+"""Nguon du phong khi SSI iBoard chan IP datacenter — VPS feed."""
+from src.infrastructure.http import http_json
 
 VPS_LIST = "https://bgapidatafeed.vps.com.vn/getlistallstock"
 VPS_DATA = "https://bgapidatafeed.vps.com.vn/getliststockdata/"
@@ -26,20 +25,14 @@ def _vps_row(x):
             last * 1e3, _f(x.get("lot")) * 10 * _f(x.get("avePrice")) * 1e3, pct)
 
 
-def _vps_get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
-
-
 def fetch_vps():
     """Nguon du phong khi iBoard chan IP datacenter (403 tren Railway).
     Cung feed goc tu so — gia tri khop tuyet doi voi iBoard (da doi chieu)."""
     global _vps_syms
     if not _vps_syms:
-        _vps_syms = sorted(s["stock_code"] for s in _vps_get(VPS_LIST)
+        _vps_syms = sorted(s["stock_code"] for s in http_json(VPS_LIST, timeout=30)
                            if s.get("post_to") == "HOSE" and len(s.get("stock_code") or "") == 3)
     rows = []
     for i in range(0, len(_vps_syms), 100):
-        rows += [_vps_row(x) for x in _vps_get(VPS_DATA + ",".join(_vps_syms[i:i + 100]))]
+        rows += [_vps_row(x) for x in http_json(VPS_DATA + ",".join(_vps_syms[i:i + 100]), timeout=30)]
     return rows

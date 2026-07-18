@@ -20,21 +20,23 @@ def run():
     assert r.get_regime("AAA", day) == "NEUTRAL"
     r.set_regime("AAA", "GOM", day)
     assert r.get_regime("AAA", day) == "GOM"
-    # alerts + cooldown
-    assert not r.recent_alert("AAA", "BUY", f"{day}T09:00:00+07:00")
+    # alerts + cooldown: alert 10:00 nam trong cua so 60' truoc 10:30, ngoai cua so 10'
+    assert not r.recent_alert("AAA", "BUY", f"{day}T10:30:00+07:00", 60)
     r.add_alerts([(f"{day}T10:00:00+07:00", "AAA", "BUY", 5e9, 0.2, 20000)])
-    assert r.recent_alert("AAA", "BUY", f"{day}T09:00:00+07:00")
+    assert r.recent_alert("AAA", "BUY", f"{day}T10:30:00+07:00", 60)
+    assert not r.recent_alert("AAA", "BUY", f"{day}T10:30:00+07:00", 10)
     # watchlist
     r.watch("HPG"); r.watch("HPG"); assert r.watchlist() == {"HPG"}
     r.unwatch("HPG"); assert r.watchlist() == set()
-    # top_net_full (video.py top_mover_rows): net + price + pct cho snapshot ts do
+    # top_net_full (top_movers): net + price + pct cho snapshot ts do
     snap(r, f"{day}T10:10:00+07:00", "AAA", 25.2e9, day_value=120e9)
-    assert r.top_net_full(f"{day}T10:10:00+07:00") == [("AAA", 25.2e9, 20000, 1.5)]
+    assert r.top_net_full(f"{day}T10:10:00+07:00", 1e9) == [("AAA", 25.2e9, 20000, 1.5)]
+    assert r.market_net(f"{day}T10:10:00+07:00") == 25.2e9
     # day_story (tu selftest cu: 9 ty cuoi phien, 5 ty sau 14:15, room -20)
     r2 = SqliteRepo(":memory:")
     for hhmm, buy, room in (("09:30", 2e9, 100), ("14:00", 4e9, 90), ("14:30", 9e9, 80)):
         snap(r2, f"{day}T{hhmm}:00+07:00", "DDD", buy, day_value=50e9, room=room)
-    r2.save_day_story(day)
+    r2.save_day_story(day, "14:15:00")
     assert r2.last_story("DDD", "2026-01-06") == (9e9, 5e9, -20)
     assert r2.last_story("DDD", day) is None                  # before_day nghiem ngat
     # meta

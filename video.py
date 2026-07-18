@@ -19,32 +19,31 @@ import sys
 import time
 import urllib.request
 import wave
-from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
-from src.config import DB, load_config, load_env
+from src.adapters.chart import BG, BG2, DIM, FG, GREEN, HEAT_NEUTRAL, RED, clamp01, lerp, mix
+from src.config import DB, load_config, load_env, now_vn
 from src.infrastructure.sqlite_repo import SqliteRepo
+from src.infrastructure.telegram import TelegramBot
 from src.infrastructure.vndirect_api import VnDirect
+from src.usecases.build_trend import top_movers
 from src.infrastructure.llm import LlmClient
 from src.usecases.make_script import make_script
 
 load_env()
 
+# PIL import cuc bo trong tung ham ve — de --send/--frames chay duoc khong can PIL
 OUT = Path(__file__).parent / "video_out"
 
 
 def day_dir():
     """Artifact chot theo ngay: video_out/YYYY-MM-DD/ — script/voice/render cua
     cung 1 ngay song chung 1 folder, khong ghi de cheo ngay."""
-    d = OUT / datetime.now().strftime("%Y-%m-%d")
+    d = OUT / now_vn().strftime("%Y-%m-%d")
     d.mkdir(parents=True, exist_ok=True)
     return d
 W, H = 1080, 1920
-BG, FG = (15, 17, 21), (240, 240, 245)
-GREEN, RED, DIM = (34, 197, 94), (239, 68, 68), (140, 145, 160)
-BG2 = (26, 31, 46)
-HEAT_NEUTRAL = (44, 49, 60)
 CAPTION_BOTTOM = H - 360
 FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
 FONT_REG = "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -54,23 +53,10 @@ FPS = 30
 XFADE = 0.35            # giay crossfade giua 2 canh
 
 
-def clamp01(t):
-    return 0.0 if t < 0 else 1.0 if t > 1 else float(t)
-
-
 def ease(t):
     """Ease-out cubic, tu clamp ve [0,1]."""
     t = clamp01(t)
     return 1 - (1 - t) ** 3
-
-
-def lerp(a, b, t):
-    return a + (b - a) * t
-
-
-def mix(c1, c2, t):
-    """Tron 2 mau RGB theo t."""
-    return tuple(int(lerp(a, b, t)) for a, b in zip(c1, c2))
 
 
 def build_timeline(names, durs):
@@ -362,29 +348,9 @@ def plan_scenes(hook, than, ket, symbols):
     return segs
 
 
-def top_mover_rows(repo, n=3):
-    """Top mua/ban rong tu snapshot moi nhat -> ([(sym, net, price, pct)], [...])."""
-    rows = repo.top_net_full(repo.max_ts())
-    gom = [r for r in rows[:n] if r[1] > 0]
-    xa = [r for r in rows[::-1][:n] if r[1] < 0]
-    return gom, xa
-
-
 def heatmap_rows(repo, n=20):
     """Top n ma theo GTGD ngay, tu snapshot moi nhat -> [(symbol, pct)]."""
     return repo.heat(repo.max_ts(), n)
-
-
-def fetch_index():
-    """Diem VN-Index phien gan nhat tu VNDirect; None neu loi — video van render."""
-    url = ("https://api-finfo.vndirect.com.vn/v4/vnmarket_prices"
-           "?q=code:VNINDEX&size=1&sort=date:desc")
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        d = json.load(urllib.request.urlopen(req, timeout=15))["data"][0]
-        return {"close": float(d["close"]), "change": float(d["change"]), "pct": float(d["pctChange"])}
-    except Exception:
-        return None
 
 
 def wav_dur(path):
@@ -404,10 +370,11 @@ def concat_wavs(paths, out):
 
 
 def build_ctx(repo):
-    rows = VnDirect().foreign_daily("VNINDEX", 10)
-    gom, xa = top_mover_rows(repo)
+    vnd = VnDirect()
+    rows = vnd.foreign_daily("VNINDEX", 10)
+    gom, xa = top_movers(repo)
     return {"net_ty": rows[-1].net_val / 1e9, "date": rows[-1].trading_date,
-            "index": fetch_index(), "rows": rows,
+            "index": vnd.index_quote(), "rows": rows,
             "heat": heatmap_rows(repo), "gom": gom, "xa": xa}
 
 
@@ -417,7 +384,7 @@ def stage_script(repo, force=False):
     if f.exists() and not force:
         print("script: dung ban da chot", f)
         return f.read_text()
-    text = make_script(repo, VnDirect(), LlmClient()).split("\n\n", 1)[-1]  # bo header "🎬 ..."
+    text = make_script(repo, VnDirect(), LlmClient())  # script tho, khong header
     f.write_text(text)
     print("script: chot ban moi", f)
     return text
@@ -431,7 +398,7 @@ def stage_tts(repo, script, force=False):
     if segs_f.exists() and not force:
         segs = [tuple(x) for x in json.loads(segs_f.read_text())]
     else:
-        gom, xa = top_mover_rows(repo)
+        gom, xa = top_movers(repo)
         segs = plan_scenes(*split_script(script), [s for s, *_ in gom + xa])
         segs_f.write_text(json.dumps(segs, ensure_ascii=False))
     wavs = []
@@ -461,7 +428,7 @@ def stage_render(repo, segs, wavs):
         karaoke += chunks_with_times(text, start, dur)
         start += dur
 
-    out = d / f"render-{datetime.now():%H%M}.mp4"
+    out = d / f"render-{now_vn():%H%M}.mp4"
     proc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error",
          "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
@@ -519,11 +486,8 @@ def frames(video=None):
 
 
 def send_video(path):
-    cfg = load_config()
-    url = f"https://api.telegram.org/bot{cfg['token']}/sendVideo"
-    subprocess.run(["curl", "-s", "-F", f"chat_id={cfg['chat_ids'][0]}",
-                    "-F", f"video=@{path}", "-F", "caption=🎬 Video khối ngoại hôm nay", url],
-                   check=True, capture_output=True)
+    tg = TelegramBot(load_config())
+    tg.send_video(tg.cfg["chat_ids"][0], path, "🎬 Video khối ngoại hôm nay")
 
 
 def render_frame(t, ctx, timeline, karaoke):
@@ -546,7 +510,6 @@ def render_frame(t, ctx, timeline, karaoke):
 def preview():
     """PNG giua moi canh tu data gia — khong can mang/TTS/ffmpeg."""
     from src.domain.entities import DayFlow
-    OUT.mkdir(exist_ok=True)
     ctx = {
         "net_ty": -193, "date": "2026-07-16",
         "index": {"close": 1782.12, "change": -24.51, "pct": -1.36},
@@ -617,7 +580,7 @@ def selftest():
     repo.insert_snapshots(ts, [(s, b, sl, 0, 0, 1e6, p, dv, pc) for s, b, sl, dv, p, pc in rows])
     heat = heatmap_rows(repo, n=2)
     assert heat == [("AAA", 2.5), ("BBB", -1.2)], heat  # sap theo day_value
-    gom, xa = top_mover_rows(repo)
+    gom, xa = top_movers(repo)
     assert gom == [("AAA", 8e9, 20000, 2.5)], gom
     assert xa == [("BBB", -5e9, 15000, -1.2)], xa
 

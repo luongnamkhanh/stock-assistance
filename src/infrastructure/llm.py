@@ -51,7 +51,7 @@ class LlmClient(LLM):
         """Call Claude API via Anthropic SDK (lazy import)."""
         import anthropic  # lazy: only loaded if needed
         resp = anthropic.Anthropic().messages.create(
-            model="claude-opus-4-8",
+            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-8"),
             max_tokens=16000,
             thinking={"type": "adaptive"},
             system=system,

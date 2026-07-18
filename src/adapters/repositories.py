@@ -26,7 +26,7 @@ class SnapshotRepo(ABC):
     def accel_rows(self, t0, t1, t2, t3): ...          # -> [(sym, day_value, win3, d1, d2, d3, day_net, price, pct)]
 
     @abstractmethod
-    def recent_alert(self, symbol, direction, cutoff): ...  # -> bool
+    def recent_alert(self, symbol, direction, ts, minutes): ...  # -> bool (cooldown `minutes` phut truoc ts)
 
     @abstractmethod
     def add_alerts(self, rows): ...                    # rows: [(ts, sym, direction, net, share, price)]
@@ -47,16 +47,16 @@ class SnapshotRepo(ABC):
     def unwatch(self, symbol): ...
 
     @abstractmethod
-    def save_day_story(self, day): ...                 # SQL aggregation (collector.py:353-370)
+    def save_day_story(self, day, late_from): ...      # net/late_net/room_delta tung ma (late_net tu moc late_from)
 
     @abstractmethod
     def last_story(self, symbol, before_day): ...      # -> (net, late_net, room_delta) | None
 
     @abstractmethod
-    def top_net(self, ts): ...                         # -> [(sym, day_net)] DESC, |net|>1 ty
+    def market_net(self, ts): ...                      # -> tong day_net toan thi truong tai ts (VND)
 
     @abstractmethod
-    def top_net_full(self, ts): ...                    # -> [(sym, day_net, price, pct)] DESC, |net|>1 ty
+    def top_net_full(self, ts, min_net): ...           # -> [(sym, day_net, price, pct)] DESC, |net|>min_net
 
     @abstractmethod
     def heat(self, ts, n): ...                         # -> [(sym, pct)] theo day_value DESC

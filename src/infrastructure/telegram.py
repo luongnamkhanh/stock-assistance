@@ -1,5 +1,6 @@
 """Telegram bot implementation."""
 import json
+import subprocess
 import urllib.request
 
 from src.adapters.gateways import Telegram
@@ -13,12 +14,41 @@ class TelegramBot(Telegram):
         self.cfg = cfg
 
     def send_to(self, chat_id, text):
-        """Send text message to a single chat_id."""
+        """Send text message to a single chat_id (cap 4000 — Telegram limit 4096)."""
         req = urllib.request.Request(
             f"https://api.telegram.org/bot{self.cfg['token']}/sendMessage",
-            data=json.dumps({"chat_id": chat_id, "text": text}).encode(),
+            data=json.dumps({"chat_id": chat_id, "text": text[:4000]}).encode(),
             headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=15)
+
+    def send_photo(self, chat_id, png, caption=""):
+        """Gui anh PNG (bytes) — multipart tu dung bang stdlib (curl khong chac co tren Railway)."""
+        b = "----tg-photo-boundary"
+        body = b"".join([
+            f'--{b}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'.encode(),
+            f'--{b}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode(),
+            (f'--{b}\r\nContent-Disposition: form-data; name="photo"; filename="daily.png"\r\n'
+             'Content-Type: image/png\r\n\r\n').encode(),
+            png, f"\r\n--{b}--\r\n".encode()])
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{self.cfg['token']}/sendPhoto", data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={b}"})
+        urllib.request.urlopen(req, timeout=30)
+
+    def broadcast_photo(self, png, caption=""):
+        """Gui anh den moi chat_id da cau hinh. False neu chua config."""
+        if not (self.cfg.get("token") and self.cfg.get("chat_ids")):
+            return False
+        for cid in self.cfg["chat_ids"]:
+            self.send_photo(cid, png, caption)
+        return True
+
+    def send_video(self, chat_id, path, caption=""):
+        """Gui video len 1 chat — curl -F vi urllib khong co multipart san."""
+        subprocess.run(["curl", "-s", "-F", f"chat_id={chat_id}", "-F", f"video=@{path}",
+                        "-F", f"caption={caption}",
+                        f"https://api.telegram.org/bot{self.cfg['token']}/sendVideo"],
+                       check=True, capture_output=True)
 
     def broadcast(self, text):
         """Broadcast text to all configured chat_ids. Return False if not configured."""

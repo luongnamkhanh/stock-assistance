@@ -2,8 +2,8 @@ from src.adapters.bot import handle_updates
 from src.infrastructure.sqlite_repo import SqliteRepo
 
 class FakeTg:
-    def __init__(self, updates):
-        self.updates, self.sent = updates, []
+    def __init__(self, updates, cfg={"token": "t", "chat_ids": [7]}):
+        self.updates, self.sent, self.cfg = updates, [], cfg
     def send_to(self, chat_id, text):
         self.sent.append((chat_id, text))
     def broadcast(self, text):
@@ -15,9 +15,7 @@ class FakeTg:
 def upd(i, chat, text):
     return {"update_id": i, "message": {"chat": {"id": chat}, "text": text}}
 
-def run(monkey_cfg={"token": "t", "chat_ids": [7]}):
-    import src.adapters.bot as bot
-    bot.load_config = lambda: monkey_cfg          # khong doc file that
+def run():
     r = SqliteRepo(":memory:")
     tg = FakeTg([upd(1, 7, "/watch hpg"), upd(2, 7, "/list"),
                  upd(3, 99, "/list"), upd(4, 99, "/id"), upd(5, 7, "/help")])

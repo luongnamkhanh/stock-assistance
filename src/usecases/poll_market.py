@@ -1,4 +1,4 @@
-"""Poll HOSE 1 lan va luu snapshot (collector.py:204-222). Try/except iBoard->VPS
+"""Poll HOSE 1 lan va luu snapshot. Try/except iBoard->VPS
 da nam trong HoseFeed.fetch_hose — usecase khong can try nua."""
 from src.config import now_vn
 

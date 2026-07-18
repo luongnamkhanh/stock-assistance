@@ -1,5 +1,4 @@
-"""SqliteRepo: toan bo SQL cua app gom vao 1 cho (collector.py truoc day rai SQL
-khap noi). SCHEMA + tung cau query copy verbatim tu collector.py, chi tham so hoa."""
+"""SqliteRepo: toan bo SQL cua app gom vao 1 cho."""
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -56,13 +55,13 @@ class SqliteRepo(SnapshotRepo):
 
     def prev_snapshot_ts(self, ts, minutes):
         cutoff = (datetime.fromisoformat(ts) - timedelta(minutes=minutes)).isoformat(timespec="seconds")
-        return self.db.execute("SELECT MAX(ts) FROM snapshots WHERE ts <= ? AND ts LIKE ?",
-                               (cutoff, ts[:10] + "%")).fetchone()[0]
+        return self.db.execute("SELECT MAX(ts) FROM snapshots WHERE ts <= ? AND ts >= ?",
+                               (cutoff, ts[:10])).fetchone()[0]
 
     def snapshot_times(self, day, until_ts, n):
         rows = self.db.execute(
-            "SELECT DISTINCT ts FROM snapshots WHERE ts LIKE ? AND ts <= ? ORDER BY ts DESC LIMIT ?",
-            (day + "%", until_ts, n)).fetchall()
+            "SELECT DISTINCT ts FROM snapshots WHERE ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ?",
+            (day, until_ts, n)).fetchall()
         return [r[0] for r in rows][::-1]
 
     def spike_rows(self, ts, prev_ts):
@@ -101,7 +100,9 @@ class SqliteRepo(SnapshotRepo):
         """
         return self.db.execute(q, (t3, t2, t1, t0)).fetchall()
 
-    def recent_alert(self, symbol, direction, cutoff):
+    def recent_alert(self, symbol, direction, ts, minutes):
+        """Da alert cung ma cung chieu trong `minutes` phut truoc ts chua (cooldown)."""
+        cutoff = (datetime.fromisoformat(ts) - timedelta(minutes=minutes)).isoformat(timespec="seconds")
         return self.db.execute("SELECT 1 FROM alerts WHERE symbol=? AND direction=? AND ts>?",
                                (symbol, direction, cutoff)).fetchone() is not None
 
@@ -129,13 +130,14 @@ class SqliteRepo(SnapshotRepo):
         self.db.execute("DELETE FROM watchlist WHERE symbol=?", (symbol,))
         self.db.commit()
 
-    def save_day_story(self, day):
-        span = self.db.execute("SELECT MIN(ts), MAX(ts) FROM snapshots WHERE ts LIKE ?", (day + "%",)).fetchone()
+    def save_day_story(self, day, late_from):
+        span = self.db.execute("SELECT MIN(ts), MAX(ts) FROM snapshots WHERE ts >= ? AND ts < ?",
+                               (day, day + "~")).fetchone()  # '~' > 'T' -> het ngay, an theo index PK
         first, last = span
         if not first:
             return
-        cut = self.db.execute("SELECT MAX(ts) FROM snapshots WHERE ts LIKE ? AND ts <= ?",
-                              (day + "%", day + "T14:15:00")).fetchone()[0] or first
+        cut = self.db.execute("SELECT MAX(ts) FROM snapshots WHERE ts >= ? AND ts <= ?",
+                              (day, f"{day}T{late_from}")).fetchone()[0] or first
         self.db.execute("""
             INSERT OR REPLACE INTO day_story
             SELECT ?, l.symbol, l.buy_val - l.sell_val,
@@ -153,15 +155,15 @@ class SqliteRepo(SnapshotRepo):
             "WHERE symbol=? AND day<? ORDER BY day DESC LIMIT 1",
             (symbol, before_day)).fetchone()
 
-    def top_net(self, ts):
-        return self.db.execute(
-            "SELECT symbol, buy_val - sell_val AS dn FROM snapshots WHERE ts=? AND ABS(dn) > 1e9 ORDER BY dn DESC",
-            (ts,)).fetchall()
+    def market_net(self, ts):
+        """Tong mua/ban rong KN toan thi truong tai snapshot ts (VND)."""
+        return self.db.execute("SELECT SUM(buy_val - sell_val) FROM snapshots WHERE ts=?",
+                               (ts,)).fetchone()[0]
 
-    def top_net_full(self, ts):
+    def top_net_full(self, ts, min_net):
         return self.db.execute(
             "SELECT symbol, buy_val - sell_val AS dn, price, COALESCE(pct, 0) "
-            "FROM snapshots WHERE ts=? AND ABS(dn) > 1e9 ORDER BY dn DESC", (ts,)).fetchall()
+            "FROM snapshots WHERE ts=? AND ABS(dn) > ? ORDER BY dn DESC", (ts, min_net)).fetchall()
 
     def heat(self, ts, n):
         return self.db.execute(
@@ -169,7 +171,8 @@ class SqliteRepo(SnapshotRepo):
             (ts, n)).fetchall()
 
     def has_snapshots(self, day):
-        return self.db.execute("SELECT 1 FROM snapshots WHERE ts LIKE ? LIMIT 1", (day + "%",)).fetchone() is not None
+        return self.db.execute("SELECT 1 FROM snapshots WHERE ts >= ? AND ts < ? LIMIT 1",
+                               (day, day + "~")).fetchone() is not None
 
     def get_meta(self, k, default=None):
         row = self.db.execute("SELECT v FROM meta WHERE k=?", (k,)).fetchone()

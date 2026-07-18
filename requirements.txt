@@ -1,2 +1,3 @@
-# core (src/) chi dung stdlib — file nay ton tai de Railway/Nixpacks nhan dien project Python
+# src/ dung stdlib + 2 goi duoi (anthropic: LLM fallback, pillow: anh dashboard /chart)
 anthropic
+pillow

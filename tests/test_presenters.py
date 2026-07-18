@@ -36,22 +36,23 @@ def run():
     assert "room -1.2tr" in story_line((20e9, 1e9, -1_200_000))
 
     assert "Cả phiên: mua ròng 25.2 tỷ" in ctx_line(25.2e9, 20000, 1.5)
-    assert "22,200đ" in price_line("HPG", [23.1, 22.2]) and "điểm" in price_line("VNINDEX", [1800.0])
+    # closes don vi VND (ohlc chuan hoa tai nguon); index van la diem
+    assert "22,200đ" in price_line("HPG", [23100, 22200]) and "điểm" in price_line("VNINDEX", [1800.0])
     assert price_line("HPG", []) == ""
     t = top_movers_text([("AAA", 8e9), ("BBB", -5e9)])
     assert "Top gom hôm nay: AAA +8 tỷ" in t and "Top xả hôm nay: BBB -5 tỷ" in t, t
     assert top_movers_text([]) == ""
 
     # bien 4 tuan: dinh/day 20 phien + vi tri gia — co phieu don vi dong, index don vi diem
-    closes = [22.0] * 19 + [22.2]
-    highs = [22.5] * 19 + [23.9]     # dinh 23,900
-    lows = [21.6] + [21.9] * 19      # day 21,600
+    closes = [22000] * 19 + [22200]
+    highs = [22500] * 19 + [23900]   # dinh 23,900
+    lows = [21600] + [21900] * 19    # day 21,600
     r = range_line("HPG", closes, highs, lows)
     assert "21,600 – 23,900" in r and "cách đáy +2.8%" in r and "cách đỉnh -7.1%" in r, r
     ri = range_line("VNINDEX", [1790.0] * 20, [1810.5] * 20, [1750.2] * 20)
     assert "1,750.2 – 1,810.5 điểm" in ri, ri
     assert range_line("HPG", [], [], []) == ""
-    assert range_line("HPG", [22.0] * 5, [22.5] * 5, [21.5] * 5) == "", "du lieu mong -> khong ve hop"
+    assert range_line("HPG", [22000] * 5, [22500] * 5, [21500] * 5) == "", "du lieu mong -> khong ve hop"
     print("test_presenters OK")
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
-"""Script TikTok chot 1 lan/ngay vao meta['script:<ngay>'] (collector.py:617-636).
-SCRIPT_SYSTEM move verbatim tu collector.py:115-127."""
+"""Script TikTok tho (khong header Telegram) — chot 1 lan/ngay vao meta['script:<ngay>'].
+Header + cap Telegram nam o noi gui (presenters.script_msg / TelegramBot.send_to)."""
 from src.config import now_vn
 from src.usecases.build_trend import trend_message
 
@@ -22,13 +22,12 @@ def make_script(repo, flows, llm):
     key = f"script:{now_vn().date().isoformat()}"
     saved = repo.get_meta(key)
     if saved:
-        return saved
-    data = trend_message("VNINDEX", "toàn HOSE", repo, flows, movers=True)
+        return saved.split("🎬 Script TikTok hôm nay:\n\n")[-1]  # don gia tri cu con header (chuyen tiep, xoa duoc sau nay)
+    data = trend_message("VNINDEX", repo, flows, movers=True)
     ts = repo.max_ts()
     if ts:  # % gia nhom GTGD lon — de script co the ke ve sac xanh/do (canh heatmap)
         heat = repo.heat(ts, 8)
         data += "\nGiá mã GTGD lớn hôm nay: " + ", ".join(f"{s} {p:+.1f}%" for s, p in heat)
     text = llm.complete(SCRIPT_SYSTEM, f"Dữ liệu phiên hôm nay:\n\n{data}\n\nViết script.").strip()
-    out = f"🎬 Script TikTok hôm nay:\n\n{text}"[:4000]
-    repo.set_meta(key, out)
-    return out
+    repo.set_meta(key, text)
+    return text

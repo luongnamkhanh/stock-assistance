@@ -1,6 +1,5 @@
 from src.infrastructure.sqlite_repo import SqliteRepo
 from src.usecases.detect_alerts import detect_accel, detect_spikes, detect_states
-from src.usecases.day_story import build_day_story
 
 class NoFlows:                       # FlowHistory cam: trend_ctx -> "" nhu khi API loi
     def foreign_daily(self, code, n=10):
@@ -42,12 +41,6 @@ def run():
     assert len(msgs) == 1 and "BBB" in msgs[0] and "TĂNG TỐC" in msgs[0], msgs
     assert "1.2 → 2.7 → 5.0" in msgs[0] and "Cả phiên" in msgs[0], msgs
     assert detect_accel(r2, F, f"{day}T10:15:00+07:00", set()) == [], "cooldown accel"
-
-    r3 = SqliteRepo(":memory:")
-    for hhmm, buy, room in (("09:30", 2e9, 100), ("14:00", 4e9, 90), ("14:30", 9e9, 80)):
-        snap(r3, f"{day}T{hhmm}:00+07:00", "DDD", buy, dv=50e9, room=room)
-    build_day_story(r3, day)
-    assert r3.last_story("DDD", "2026-01-06") == (9e9, 5e9, -20)
     print("test_usecases OK")
 
 if __name__ == "__main__":

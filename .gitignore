@@ -8,3 +8,6 @@ nohup.out
 .playwright-mcp/
 .env
 video_out/
+.DS_Store
+*.mp3
+*.wav

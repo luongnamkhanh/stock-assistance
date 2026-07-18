@@ -1,18 +1,16 @@
-"""Bot controller: route Telegram commands sang usecases (collector.py:552-614 poll_commands).
-load_config duoc goi (khong import truc tiep dung) de test monkey-patch bot.load_config duoc."""
+"""Bot controller: route Telegram commands sang usecases."""
 import time
 
-from src.adapters import presenters
-from src.config import load_config
+from src.adapters import chart, presenters
 from src.usecases.build_brief import build_brief
-from src.usecases.build_trend import trend_message
+from src.usecases.build_trend import market_snapshot, trend_message
 from src.usecases.make_script import make_script
 
 
 def handle_updates(repo, tg, flows, llm, wait=25):
     """Handle commands via long-polling (near-instant replies).
     /id works from any chat; the rest need an authorized chat."""
-    cfg = load_config()
+    cfg = tg.cfg  # 1 nguon config duy nhat — main reload TelegramBot moi vong lap
     if not (cfg.get("token") and cfg.get("chat_ids")):
         time.sleep(wait)
         return
@@ -45,18 +43,27 @@ def handle_updates(repo, tg, flows, llm, wait=25):
         elif cmd == "/TREND":
             try:
                 if arg:
-                    msg = trend_message(arg, arg, repo, flows)
+                    msg = trend_message(arg, repo, flows)
                 else:
-                    msg = trend_message("VNINDEX", "toàn HOSE", repo, flows, movers=True)
+                    msg = trend_message("VNINDEX", repo, flows, movers=True)
             except Exception as e:
                 msg = f"Không lấy được dữ liệu xu hướng ({e})"
             tg.send_to(chat_id, msg)
         elif cmd == "/SCRIPT":
             try:
-                msg = make_script(repo, flows, llm)
+                msg = presenters.script_msg(make_script(repo, flows, llm))
             except Exception as e:
                 msg = f"Không tạo được script ({e})"
             tg.send_to(chat_id, msg)
+        elif cmd == "/CHART":
+            try:
+                ctx = market_snapshot(repo, flows)
+                if ctx:
+                    tg.send_photo(chat_id, chart.daily_png(ctx), f"📊 Khối ngoại {ctx['date']}")
+                else:
+                    tg.send_to(chat_id, "Chưa có dữ liệu phiên nào trong DB.")
+            except Exception as e:
+                tg.send_to(chat_id, f"Không vẽ được chart ({e})")
         elif cmd == "/BRIEF" and arg:
             tg.send_to(chat_id, f"⏳ Đang tổng hợp brief {arg}, chờ ~30 giây...")
             try:
@@ -66,4 +73,5 @@ def handle_updates(repo, tg, flows, llm, wait=25):
             tg.send_to(chat_id, msg)
         elif cmd in ("/HELP", "/START"):
             tg.send_to(chat_id, presenters.HELP_TEXT)
-    repo.set_meta("tg_offset", str(offset))
+    if updates:  # khong co update -> offset khong doi, khoi commit sqlite moi 25s
+        repo.set_meta("tg_offset", str(offset))

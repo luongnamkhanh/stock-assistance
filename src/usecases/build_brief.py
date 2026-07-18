@@ -1,5 +1,7 @@
-"""/brief MÃ — bản tin tổng hợp 1 mã: dòng tiền khối ngoại + cơ bản + tin tức
-(brief.py:42-69,113-123,174-178). INFORMATION ONLY — không khuyến nghị mua/bán."""
+"""/brief MÃ — bản tin tổng hợp 1 mã: dòng tiền khối ngoại + cơ bản + tin tức.
+INFORMATION ONLY — không khuyến nghị mua/bán."""
+from concurrent.futures import ThreadPoolExecutor
+
 from src.adapters import presenters
 from src.infrastructure import news_api, vndirect_api
 
@@ -34,15 +36,18 @@ Nguồn: [n] tên báo, ngày — liệt kê đúng các tin đã trích. Thêm 
 
 
 def gather(sym, flows):
+    """4 nguon doc lap -> fetch song song; nguon nao loi thi ghi chu loi thay vi fail ca brief."""
+    tasks = [("DÒNG TIỀN KHỐI NGOẠI 10 PHIÊN", lambda: presenters.format_trend(sym, flows.foreign_daily(sym))),
+             ("GIÁ", lambda: vndirect_api.fetch_prices_text(sym)),
+             ("CHỈ SỐ CƠ BẢN", lambda: vndirect_api.fetch_fundamentals(sym)),
+             ("TIN TỨC GẦN ĐÂY", lambda: news_api.fetch_news(sym))]
     sections = {}
-    for name, fn in [("DÒNG TIỀN KHỐI NGOẠI 10 PHIÊN", lambda: presenters.format_trend(sym, flows.foreign_daily(sym))),
-                     ("GIÁ", lambda: vndirect_api.fetch_prices_text(sym)),
-                     ("CHỈ SỐ CƠ BẢN", lambda: vndirect_api.fetch_fundamentals(sym)),
-                     ("TIN TỨC GẦN ĐÂY", lambda: news_api.fetch_news(sym))]:
-        try:
-            sections[name] = fn()
-        except Exception as e:
-            sections[name] = f"(lỗi khi lấy dữ liệu: {e})"
+    with ThreadPoolExecutor(len(tasks)) as ex:
+        for name, fut in [(name, ex.submit(fn)) for name, fn in tasks]:
+            try:
+                sections[name] = fut.result()
+            except Exception as e:
+                sections[name] = f"(lỗi khi lấy dữ liệu: {e})"
     return "\n\n".join(f"### {k}\n{v}" for k, v in sections.items())
 
 
@@ -50,4 +55,4 @@ def build_brief(sym, flows, llm):
     sym = sym.upper()
     context = gather(sym, flows)
     text = llm.complete(SYSTEM, f"Dữ liệu về cổ phiếu {sym} hôm nay:\n\n{context}\n\nViết bản tin.").strip()
-    return f"📋 Brief {sym}\n\n{text}"[:4000]  # Telegram cap 4096
+    return f"📋 Brief {sym}\n\n{text}"

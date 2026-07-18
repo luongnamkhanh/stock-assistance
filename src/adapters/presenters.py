@@ -1,11 +1,12 @@
 """Toan bo text Telegram. Nhan entity/so lieu thuan tu usecase — khong IO, khong DB,
 khong network. Duy nhat doc hang so hien thi tu src.config."""
-from src.config import WINDOW_MINUTES
+from src.config import STORY_LATE_SHARE, STORY_MIN_NET, STORY_ROOM_MIN, WINDOW_MINUTES
 from src.domain import signals
 
 HELP_TEXT = """📖 Lệnh của bot:
 /trend — xu hướng khối ngoại toàn HOSE 10 phiên gần nhất
 /trend MÃ — xu hướng khối ngoại của 1 mã (vd: /trend HPG)
+/chart — ảnh dashboard khối ngoại phiên gần nhất
 /brief MÃ — bản tin AI tổng hợp: dòng tiền + định giá + tin tức (~30 giây)
 /script — kịch bản video TikTok từ diễn biến khối ngoại hôm nay
 /watch MÃ — theo dõi mã (ngưỡng alert giảm một nửa)
@@ -74,9 +75,9 @@ def story_line(row):
     """(net, late_net, room_delta) cua phien gan nhat -> ghi chu neu dang noi."""
     net, late, room_d = row
     bits = []
-    if abs(net) >= 10e9 and late * net > 0 and abs(late) >= 0.4 * abs(net):
+    if abs(net) >= STORY_MIN_NET and late * net > 0 and abs(late) >= STORY_LATE_SHARE * abs(net):
         bits.append(f"{'gom' if net > 0 else 'xả'} dồn 30' cuối ({late/1e9:+,.0f}/{net/1e9:+,.0f} tỷ)")
-    if abs(room_d) >= 500_000:  # ponytail: nguong tho, chinh khi thay keu nhieu/it qua
+    if abs(room_d) >= STORY_ROOM_MIN:
         bits.append(f"room {'+' if room_d > 0 else '-'}{abs(room_d)/1e6:.1f}tr cp")
     return "\nHôm qua: " + " · ".join(bits) if bits else ""
 
@@ -87,14 +88,8 @@ def trend_ctx_line(flows):
         return ""
     vals = [f.net_val for f in flows]
     squares = "".join("🟩" if v >= 0 else "🟥" for v in vals)
-    last = vals[-1] >= 0
-    streak = 0
-    for v in reversed(vals):
-        if (v >= 0) != last:
-            break
-        streak += 1
-    side = "mua" if last else "bán"
-    tail = f" — {streak} phiên {side} ròng liên tiếp" if streak >= 3 else ""
+    t = signals.trend_stats(vals)
+    tail = f" — {t.streak} phiên {t.streak_side} ròng liên tiếp" if t.streak >= 3 else ""
     return f"\n{len(vals)} phiên trước: {squares} lũy kế {sum(vals)/1e9:+,.0f} tỷ{tail}"
 
 
@@ -135,7 +130,7 @@ def price_line(code, closes):
         return ""
     d1 = (closes[-1] / closes[-2] - 1) * 100 if len(closes) > 1 else 0.0
     dn = (closes[-1] / closes[0] - 1) * 100
-    gia = f"{closes[-1]:,.1f} điểm" if code == "VNINDEX" else f"{closes[-1]*1000:,.0f}đ"
+    gia = f"{closes[-1]:,.1f} điểm" if code == "VNINDEX" else f"{closes[-1]:,.0f}đ"
     return f"Giá: {gia} | phiên nay {d1:+.1f}% | {len(closes)} phiên {dn:+.1f}%"
 
 
@@ -150,21 +145,25 @@ def range_line(code, closes, highs, lows):
     if code == "VNINDEX":
         rng = f"{bot:,.1f} – {top:,.1f} điểm"
     else:
-        rng = f"{bot*1000:,.0f} – {top*1000:,.0f}"
+        rng = f"{bot:,.0f} – {top:,.0f}"
     return f"Biên 4 tuần: {rng} | cách đáy {d_bot:+.1f}%, cách đỉnh {d_top:+.1f}%"
 
 
 def top_movers_text(rows):
     if not rows:
         return ""
-    top = ", ".join(f"{s} {v/1e9:+.0f} tỷ" for s, v in rows[:3] if v > 0)
-    bot = ", ".join(f"{s} {v/1e9:+.0f} tỷ" for s, v in rows[::-1][:3] if v < 0)
+    top = ", ".join(f"{s} {v/1e9:+.0f} tỷ" for s, v, *_ in rows[:3] if v > 0)
+    bot = ", ".join(f"{s} {v/1e9:+.0f} tỷ" for s, v, *_ in rows[::-1][:3] if v < 0)
     out = ""
     if top:
         out += f"\nTop gom hôm nay: {top}"
     if bot:
         out += f"\nTop xả hôm nay: {bot}"
     return out
+
+
+def script_msg(text):
+    return f"🎬 Script TikTok hôm nay:\n\n{text}"
 
 
 def alert_digest(ts, msgs):
