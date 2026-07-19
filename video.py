@@ -37,12 +37,13 @@ load_env()
 
 # PIL import cuc bo trong tung ham ve — de --send/--frames chay duoc khong can PIL
 OUT = Path(__file__).parent / "video_out"
+_DAY_TAG = ""   # "-p2" khi render video cuoi tuan phan 2 — artifact tach folder rieng
 
 
 def day_dir():
-    """Artifact chot theo ngay: video_out/YYYY-MM-DD/ — script/voice/render cua
+    """Artifact chot theo ngay: video_out/YYYY-MM-DD[-p2]/ — script/voice/render cua
     cung 1 ngay song chung 1 folder, khong ghi de cheo ngay."""
-    d = OUT / now_vn().strftime("%Y-%m-%d")
+    d = OUT / (now_vn().strftime("%Y-%m-%d") + _DAY_TAG)
     d.mkdir(parents=True, exist_ok=True)
     return d
 W, H = 1080, 1920
@@ -413,15 +414,17 @@ def build_ctx(repo):
             "heat": heatmap_rows(repo), "gom": gom, "xa": xa, "funds": fund_data(repo)}
 
 
-def stage_script(repo, force=False, weekly=False):
+def stage_script(repo, force=False, weekly=False, part=1):
     """Stage 1 — chot script (1 lan goi LLM); da chot thi dung lai.
-    Luu y: --weekly dung chung folder ngay chay — dung render daily cung ngay (de script.txt)."""
+    Luu y: --weekly (p1) dung chung folder ngay chay — dung render daily cung ngay."""
     f = day_dir() / "script.txt"
     if f.exists() and not force:
         print("script: dung ban da chot", f)
         return f.read_text()
-    gen = make_week_script if weekly else make_script
-    text = gen(repo, VnDirect(), LlmClient())  # script tho, khong header
+    if weekly:
+        text = make_week_script(repo, VnDirect(), LlmClient(), part=part)
+    else:
+        text = make_script(repo, VnDirect(), LlmClient())  # script tho, khong header
     f.write_text(text)
     print("script: chot ban moi", f)
     return text
@@ -484,10 +487,10 @@ def stage_render(repo, segs, wavs, weekly=False):
     return out
 
 
-def make_video(weekly=False):
+def make_video(weekly=False, part=1):
     repo = SqliteRepo(DB)
     fresh = "--fresh" in sys.argv  # chot lai script + voice (mac dinh: dung ban da chot)
-    script = stage_script(repo, force=fresh, weekly=weekly)
+    script = stage_script(repo, force=fresh, weekly=weekly, part=part)
     segs, wavs = stage_tts(repo, script, force=fresh)
     return stage_render(repo, segs, wavs, weekly=weekly)
 
@@ -642,6 +645,8 @@ def selftest():
 
 
 if __name__ == "__main__":
+    if "--part2" in sys.argv:   # video cuoi tuan phan 2 — folder rieng, ap dung ca --send/--frames
+        _DAY_TAG = "-p2"
     if "--selftest" in sys.argv:
         selftest()
     elif "--preview" in sys.argv:
@@ -652,7 +657,7 @@ if __name__ == "__main__":
         send_video(day_dir() / "daily.mp4")
         print("Đã gửi vào Telegram")
     else:
-        path = make_video(weekly="--weekly" in sys.argv)
+        path = make_video(weekly="--weekly" in sys.argv, part=2 if "--part2" in sys.argv else 1)
         print("Video:", path)
         if "--no-send" not in sys.argv:  # tele vua la noi duyet vua la archive
             send_video(path)

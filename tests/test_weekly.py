@@ -3,7 +3,7 @@ from datetime import datetime
 from src.config import VN_TZ
 from src.domain.entities import DayFlow
 from src.infrastructure.sqlite_repo import SqliteRepo
-from src.usecases.weekly import make_week_script, week_movers, week_range
+from src.usecases.weekly import make_week_script, week_fusion, week_movers, week_range
 
 
 class FakeFlows:
@@ -42,14 +42,27 @@ def run():
 
     llm = FakeLlm()
     now = datetime(2026, 7, 18, tzinfo=VN_TZ)
-    txt = make_week_script(r, FakeFlows(), llm, now=now)
+    txt = make_week_script(r, FakeFlows(), llm, part=1, now=now)
     assert "Lũy kế cả tuần: -400 tỷ" in llm.user and "AAA +12 tỷ" in llm.user, llm.user
     # closes[-6] = phien thu 6 tu cuoi = thu 6 tuan truoc (1800) -> +0.6%
     assert "VN-Index: 1,810.0 điểm, cả tuần +0.6%" in llm.user, llm.user
+    assert "quỹ" not in llm.user, "p1 khong co data quy"
     assert txt.startswith("[HOOK]")
     llm2 = FakeLlm()  # da chot -> khong goi LLM lai
-    assert make_week_script(r, FakeFlows(), llm2, now=now) == txt
+    assert make_week_script(r, FakeFlows(), llm2, part=1, now=now) == txt
     assert not hasattr(llm2, "user")
+
+    # phan 2: hop luu khoi ngoai x quy
+    r.save_fund_month("2026-07", [("QA", "AAA", 10, ""), ("QB", "AAA", 5, "")], [], [],
+                      [(f, "Own", "2026-06", 1000, None, None, None, None, None) for f in ("QA", "QB")])
+    g2, x2 = week_fusion(r, FakeFlows(), "2026-07-13", "2026-07-17")
+    assert g2 == [("AAA", 12e9, 2, g2[0][3])] and x2 == [], (g2, x2)
+    llm3 = FakeLlm()
+    make_week_script(r, FakeFlows(), llm3, part=2, now=now)
+    assert "AAA +12 tỷ, 2 quỹ mở đang nắm" in llm3.user, llm3.user
+    assert "Quỹ mở đang nắm nhiều nhất" in llm3.user and "VN-Index" not in llm3.user, llm3.user
+    y, w, _ = now.isocalendar()
+    assert r.get_meta(f"script:week:{y}-W{w:02d}-p1") and r.get_meta(f"script:week:{y}-W{w:02d}-p2")
     print("test_weekly OK")
 
 

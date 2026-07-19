@@ -70,15 +70,18 @@ bước QA — video đăng public, một frame lỗi là lên sóng luôn.
 5. **Gửi**: `--send` gửi `daily.mp4` của ngày vào chat đầu tiên trong config, KHÔNG
    render lại. Nếu user chưa duyệt video trong session này thì hỏi trước khi gửi.
 
-## Video tuần (`--weekly`, chạy thứ 7 sau khi sync data)
+## Video tuần — 2 PHẦN (chạy cuối tuần sau khi sync data)
 
-Cùng pipeline/QA/contract như daily, chỉ khác data + script:
-- `DB_PATH=video_out/flows-railway.db .venv/bin/python video.py --weekly --no-send` —
-  bar = từng phiên trong tuần, movers = tổng `day_story` cả tuần, heatmap = % giá tuần
-  của chính các movers, tiêu đề scene tự đổi "TUẦN QUA/CẢ TUẦN".
-- Script tuần: worker Railway tự chốt + gửi duyệt sáng thứ 7 vào `meta['script:week:YYYY-WXX']`
-  — sync DB sau đó để render đúng bản chốt (giống contract script ngày).
-- Artifacts nằm trong folder ngày chạy — ĐỪNG render daily cùng ngày (đè `script.txt`).
+Cùng pipeline/QA/contract như daily, chỉ khác data + script. Phần 1 tổng kết tuần
+(đăng thứ 7), phần 2 "smart money" hợp lưu khối ngoại × quỹ mở (đăng CN), mỗi phần 25-35s:
+- P1: `DB_PATH=video_out/flows-railway.db .venv/bin/python video.py --weekly --no-send`
+- P2: `DB_PATH=video_out/flows-railway.db .venv/bin/python video.py --weekly --part2 --no-send`
+  (artifact vào folder riêng `YYYY-MM-DD-p2/`; `--send --part2` gửi bản p2)
+- Data tuần: bar = từng phiên, movers = tổng `day_story` cả tuần + % giá tuần, p2 thêm
+  số quỹ mở đang nắm từng mover. Tiêu đề scene tự đổi "TUẦN QUA/CẢ TUẦN".
+- Script: worker Railway tự chốt + gửi duyệt cả 2 phần sáng thứ 7 vào
+  `meta['script:week:YYYY-WXX-p1/-p2']` — sync DB sau đó để render đúng bản chốt.
+- P1 nằm trong folder ngày chạy — ĐỪNG render daily cùng ngày (đè `script.txt`).
 
 ## Lỗi đã gặp (đừng lặp lại)
 
