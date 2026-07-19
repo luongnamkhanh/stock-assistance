@@ -1,0 +1,113 @@
+"""Tong ket TUAN cho video cuoi tuan: data gop 5 phien (day_story) + script tuan.
+Script chot 1 lan/tuan vao meta['script:week:YYYY-WXX'] — worker Railway gen + gui duyet
+sang thu 7, video local (video.py --weekly) dung dung ban do (cung contract voi daily)."""
+from datetime import timedelta
+
+from src.config import MOVERS_MIN_NET, now_vn
+from src.usecases.funds import fund_data, fund_summary_text
+
+WEEK_SYSTEM = """Bạn là người viết kịch bản video TikTok tổng kết TUẦN (35-50 giây đọc thành tiếng) về chứng khoán Việt Nam.
+Nhiệm vụ: từ dữ liệu khối ngoại cả tuần, viết script cho 1 video tổng kết cuối tuần.
+
+Cấu trúc bắt buộc (plain text):
+[HOOK] 1 câu mở đầu bằng con số ấn tượng nhất của TUẦN. Không chào hỏi.
+[THÂN] 4-6 câu ngắn, kể ĐỦ các ý theo mạch: (1) lũy kế cả tuần và nhịp từng phiên (phiên nào gãy/đảo chiều),
+(2) VN-Index cả tuần tăng/giảm bao nhiêu phần trăm, (3) top gom/xả cả tuần kèm số tỷ và % giá tuần;
+nếu dữ liệu có phần quỹ mở thì thêm 1 câu về mã được nhiều quỹ nắm.
+[KẾT] 1 câu hẹn tuần sau + mời follow kênh.
+Dòng cuối: 4-5 hashtag tiếng Việt.
+
+Quy tắc: giọng nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc thành tiếng, số liệu làm tròn cho dễ nghe,
+luôn nói rõ "cả tuần"/"tuần này" để không lẫn với video ngày. KHÔNG khuyến nghị mua/bán.
+KHÔNG bịa gì ngoài dữ liệu được đưa."""
+
+
+def week_range(now):
+    """(thu_hai, thu_sau) ISO cua tuan hien tai — chay cuoi tuan van tra tuan vua xong."""
+    mon = now.date() - timedelta(days=now.weekday())
+    return mon.isoformat(), (mon + timedelta(days=4)).isoformat()
+
+
+def week_movers(repo, flows, d1, d2, n=3):
+    """Top gom/xa CA TUAN tu day_story + % gia tuan tung ma -> ([(sym, net, price, pct)], [...])."""
+    rows = repo.week_net(d1, d2, MOVERS_MIN_NET)
+    gom = [r for r in rows[:n] if r[1] > 0]
+    xa = [r for r in rows[::-1][:n] if r[1] < 0]
+    out = []
+    for sym, net in gom + xa:
+        price, pct = 0, 0.0
+        try:
+            series = flows.daily_closes(sym, 10)
+            inw = [c for d, c in series if d1 <= d <= d2]
+            base = [c for d, c in series if d < d1]
+            if inw:
+                price = inw[-1]
+                if base and base[-1]:
+                    pct = (inw[-1] / base[-1] - 1) * 100
+        except Exception:
+            pass  # thieu gia -> van co net, pct 0
+        out.append((sym, net, price, pct))
+    return out[:len(gom)], out[len(gom):]
+
+
+def weekly_ctx(repo, flows):
+    """Nhu video.build_ctx nhung gop tuan: bar = tung phien trong tuan, movers = tong
+    day_story, heat = % gia tuan cua chinh cac movers. week=True de scene doi tieu de."""
+    d1, d2 = week_range(now_vn())
+    rows = [f for f in flows.foreign_daily("VNINDEX", 6) if d1 <= f.trading_date <= d2]
+    gom, xa = week_movers(repo, flows, d1, d2)
+    closes, _, _ = flows.ohlc("VNINDEX")
+    index = None
+    if len(closes) >= 6 and closes[-6]:
+        index = {"close": closes[-1], "change": closes[-1] - closes[-6],
+                 "pct": (closes[-1] / closes[-6] - 1) * 100}
+    return {"net_ty": sum(f.net_val for f in rows) / 1e9,
+            "date": f"Tuần {d1[8:]}/{d1[5:7]} – {d2[8:]}/{d2[5:7]}/{d2[:4]}",
+            "index": index, "rows": rows, "heat": [(s, p) for s, _, _, p in gom + xa],
+            "gom": gom, "xa": xa, "funds": fund_data(repo), "week": True}
+
+
+def make_week_script(repo, flows, llm, now=None):
+    """Script tuan tho — chot 1 lan/tuan vao meta. `now` inject duoc cho test."""
+    now = now or now_vn()
+    y, w, _ = now.isocalendar()
+    key = f"script:week:{y}-W{w:02d}"
+    saved = repo.get_meta(key)
+    if saved:
+        return saved
+    d1, d2 = week_range(now)
+    rows = [f for f in flows.foreign_daily("VNINDEX", 6) if d1 <= f.trading_date <= d2]
+    data = f"Tuần {d1} đến {d2}, khối ngoại sàn HOSE:"
+    data += "\nTừng phiên (tỷ đồng): " + ", ".join(
+        f"{f.trading_date[8:]}/{f.trading_date[5:7]}: {f.net_val / 1e9:+,.0f}" for f in rows)
+    data += f"\nLũy kế cả tuần: {sum(f.net_val for f in rows) / 1e9:+,.0f} tỷ"
+    closes, _, _ = flows.ohlc("VNINDEX")
+    if len(closes) >= 6 and closes[-6]:
+        data += f"\nVN-Index: {closes[-1]:,.1f} điểm, cả tuần {(closes[-1] / closes[-6] - 1) * 100:+.1f}%"
+    gom, xa = week_movers(repo, flows, d1, d2)
+    if gom:
+        data += "\nTop gom cả tuần: " + ", ".join(f"{s} {v / 1e9:+,.0f} tỷ (giá tuần {p:+.1f}%)"
+                                                  for s, v, _, p in gom)
+    if xa:
+        data += "\nTop xả cả tuần: " + ", ".join(f"{s} {v / 1e9:+,.0f} tỷ (giá tuần {p:+.1f}%)"
+                                                 for s, v, _, p in xa)
+    data += fund_summary_text(repo)
+    text = llm.complete(WEEK_SYSTEM, f"Dữ liệu tuần:\n\n{data}\n\nViết script.").strip()
+    repo.set_meta(key, text)
+    return text
+
+
+def maybe_send_week_script(repo, flows, llm, tg):
+    """Goi moi vong lap main; thu 7 chot script tuan + gui kenh duyet (single source of truth
+    nhu script ngay — video local sync DB ve la dung dung ban nay)."""
+    now = now_vn()
+    y, w, _ = now.isocalendar()
+    if now.weekday() != 5 or repo.get_meta(f"script:week:{y}-W{w:02d}"):
+        return
+    try:
+        text = make_week_script(repo, flows, llm)
+        if tg.cfg.get("chat_ids"):
+            tg.send_to(tg.cfg["chat_ids"][0], "🎬 Script video tuần:\n\n" + text)
+        print(f"[{now.isoformat(timespec='seconds')}] script tuan {y}-W{w:02d} da chot")
+    except Exception as e:
+        print(f"[{now.isoformat(timespec='seconds')}] script tuan failed: {e}")

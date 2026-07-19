@@ -178,6 +178,12 @@ class SqliteRepo(SnapshotRepo):
             WHERE l.ts = ?""", (day, cut, first, last))
         self.db.commit()
 
+    def week_net(self, d1, d2, min_net):
+        """Tong NN rong tung ma qua cac phien d1..d2 (tu day_story) — movers theo tuan."""
+        return self.db.execute(
+            "SELECT symbol, SUM(net) AS wn FROM day_story WHERE day>=? AND day<=? "
+            "GROUP BY symbol HAVING ABS(wn) > ? ORDER BY wn DESC", (d1, d2, min_net)).fetchall()
+
     def last_story(self, symbol, before_day):
         return self.db.execute(
             "SELECT net, late_net, room_delta FROM day_story "

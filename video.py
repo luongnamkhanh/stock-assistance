@@ -31,6 +31,7 @@ from src.usecases.build_trend import top_movers
 from src.usecases.funds import fund_data
 from src.infrastructure.llm import LlmClient
 from src.usecases.make_script import make_script
+from src.usecases.weekly import make_week_script, weekly_ctx
 
 load_env()
 
@@ -127,7 +128,7 @@ def scene_hook(img, ctx, ts, dur):
     from PIL import ImageDraw
     d = ImageDraw.Draw(img)
     s = ease(ts / 0.4)
-    d.text((W / 2, lerp(300, 380, s)), "KHỐI NGOẠI HÔM NAY",
+    d.text((W / 2, lerp(300, 380, s)), "KHỐI NGOẠI TUẦN QUA" if ctx.get("week") else "KHỐI NGOẠI HÔM NAY",
            font=_font(64), fill=mix(BG, DIM, s), anchor="mm")
     d.text((W / 2, 470), ctx["date"], font=_font(44, bold=False), fill=DIM, anchor="mm")
     if ctx["index"] and ts > 0.3:
@@ -141,14 +142,15 @@ def scene_hook(img, ctx, ts, dur):
     color = GREEN if net >= 0 else RED
     d.text((W / 2, 810), f"{net * ease(ts / 1.1):+,.0f}",   # count-up 1.1s
            font=_font(220), fill=color, anchor="mm")
-    d.text((W / 2, 1000), "TỶ ĐỒNG " + ("MUA RÒNG" if net >= 0 else "BÁN RÒNG"),
+    d.text((W / 2, 1000), "TỶ ĐỒNG " + ("MUA RÒNG" if net >= 0 else "BÁN RÒNG")
+           + (" CẢ TUẦN" if ctx.get("week") else ""),
            font=_font(64), fill=color, anchor="mm")
 
 
 def scene_chart(img, ctx, ts, dur):
     from PIL import ImageDraw
     d = ImageDraw.Draw(img)
-    d.text((W / 2, 260), "KHỐI NGOẠI 10 PHIÊN (tỷ đồng)",
+    d.text((W / 2, 260), "KHỐI NGOẠI TUẦN NÀY (tỷ đồng)" if ctx.get("week") else "KHỐI NGOẠI 10 PHIÊN (tỷ đồng)",
            font=_font(52), fill=FG, anchor="mm")
     vals = [r.net_val / 1e9 for r in ctx["rows"]]
     peak = max(abs(v) for v in vals) or 1
@@ -176,7 +178,8 @@ def scene_chart(img, ctx, ts, dur):
 def scene_heatmap(img, ctx, ts, dur):
     from PIL import ImageDraw
     d = ImageDraw.Draw(img)
-    d.text((W / 2, 260), "TOP GIAO DỊCH HÔM NAY", font=_font(52), fill=FG, anchor="mm")
+    d.text((W / 2, 260), "% GIÁ TUẦN — TOP GOM/XẢ" if ctx.get("week") else "TOP GIAO DỊCH HÔM NAY",
+           font=_font(52), fill=FG, anchor="mm")
     cols, gap, x0, y0, th = 4, 12, 70, 380, 180
     tw = (W - 2 * x0 - (cols - 1) * gap) // cols
     for i, (sym, pct) in enumerate(ctx["heat"]):
@@ -344,7 +347,7 @@ def hook_number(text, fallback):
     return v if fallback >= 0 else -v
 
 
-TREND_RE = re.compile(r"\d+\s*phiên|liên tiếp|chuỗi|lũy kế|đảo chiều|hạ nhiệt|xu hướng", re.I)
+TREND_RE = re.compile(r"\d+\s*phiên|liên tiếp|chuỗi|lũy kế|đảo chiều|hạ nhiệt|xu hướng|tuần", re.I)
 HEAT_RE = re.compile(r"%|phần trăm|sắc xanh|sắc đỏ|nhuộm|bứt phá|tăng trần|giảm sàn|tăng giá|giảm giá", re.I)
 FLOW_RE = re.compile(r"gom|xả|mua|bán|\btỷ\b", re.I)  # cau noi dong tien (vs cau thuan % gia)
 FUND_RE = re.compile(r"quỹ", re.I)                    # cau noi quy mo -> scene funds
@@ -410,13 +413,15 @@ def build_ctx(repo):
             "heat": heatmap_rows(repo), "gom": gom, "xa": xa, "funds": fund_data(repo)}
 
 
-def stage_script(repo, force=False):
-    """Stage 1 — chot script cua ngay (1 lan goi Gemini); da chot thi dung lai."""
+def stage_script(repo, force=False, weekly=False):
+    """Stage 1 — chot script (1 lan goi LLM); da chot thi dung lai.
+    Luu y: --weekly dung chung folder ngay chay — dung render daily cung ngay (de script.txt)."""
     f = day_dir() / "script.txt"
     if f.exists() and not force:
         print("script: dung ban da chot", f)
         return f.read_text()
-    text = make_script(repo, VnDirect(), LlmClient())  # script tho, khong header
+    gen = make_week_script if weekly else make_script
+    text = gen(repo, VnDirect(), LlmClient())  # script tho, khong header
     f.write_text(text)
     print("script: chot ban moi", f)
     return text
@@ -442,11 +447,11 @@ def stage_tts(repo, script, force=False):
     return segs, wavs
 
 
-def stage_render(repo, segs, wavs):
+def stage_render(repo, segs, wavs, weekly=False):
     """Stage 3 — thuan local (PIL + ffmpeg, khong API): lap lai thoai mai khi chinh
     visual/animation, script & voice giu nguyen. Moi lan ra 1 ban render-HHMM.mp4."""
     d = day_dir()
-    ctx = build_ctx(repo)
+    ctx = weekly_ctx(repo, VnDirect()) if weekly else build_ctx(repo)
     ctx["net_ty"] = hook_number(segs[0][1], ctx["net_ty"])  # so tren hinh = so voice doc
     durs = [wav_dur(p) for p in wavs]
     audio = d / "audio.wav"
@@ -479,12 +484,12 @@ def stage_render(repo, segs, wavs):
     return out
 
 
-def make_video():
+def make_video(weekly=False):
     repo = SqliteRepo(DB)
     fresh = "--fresh" in sys.argv  # chot lai script + voice (mac dinh: dung ban da chot)
-    script = stage_script(repo, force=fresh)
+    script = stage_script(repo, force=fresh, weekly=weekly)
     segs, wavs = stage_tts(repo, script, force=fresh)
-    return stage_render(repo, segs, wavs)
+    return stage_render(repo, segs, wavs, weekly=weekly)
 
 
 def frames(video=None):
@@ -599,6 +604,10 @@ def selftest():
                        "Họ gom VIC 250 tỷ.", "Kết.", ["HPG", "VIC"])
     assert [s for s, _ in segs] == ["hook", "funds", "movers", "outro"], segs
 
+    segs = plan_scenes("Hook.", "Cả tuần khối ngoại xả hơn 3.400 tỷ. Họ gom VIC 250 tỷ.",
+                       "Kết.", ["VIC"])
+    assert [s for s, _ in segs] == ["hook", "chart", "movers", "outro"], segs  # "tuần" -> chart
+
     assert hook_number("Khối ngoại xả ròng hơn 4.600 tỷ đồng!", -29) == -4600
     assert hook_number("Họ gom 1,5 nghìn tỷ hôm nay", -29) == 1500
     assert hook_number("Một phiên không có gì nổi bật.", -29) == -29
@@ -643,7 +652,7 @@ if __name__ == "__main__":
         send_video(day_dir() / "daily.mp4")
         print("Đã gửi vào Telegram")
     else:
-        path = make_video()
+        path = make_video(weekly="--weekly" in sys.argv)
         print("Video:", path)
         if "--no-send" not in sys.argv:  # tele vua la noi duyet vua la archive
             send_video(path)

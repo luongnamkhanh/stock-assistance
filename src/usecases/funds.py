@@ -34,6 +34,18 @@ def fund_data(repo):
             "out": [s for s in before if s not in syms][:6]}
 
 
+def fund_summary_text(repo):
+    """2 dong data quy cho script video (ngay + tuan). "" neu chua co du lieu."""
+    fd = fund_data(repo)
+    if not fd:
+        return ""
+    out = ("\nQuỹ mở đang nắm nhiều nhất (nguồn Fmarket, top 10 khoản/quỹ): "
+           + ", ".join(f"{s} {n} quỹ" for s, n, _ in fd["rows"][:5]))
+    if fd["new"]:
+        out += "\nMã mới vào top danh mục quỹ tháng này: " + ", ".join(fd["new"])
+    return out
+
+
 def fund_stock_message(sym, repo):
     months = repo.fund_months()
     if not months:

@@ -56,6 +56,9 @@ class SnapshotRepo(ABC):
     def last_story(self, symbol, before_day): ...      # -> (net, late_net, room_delta) | None
 
     @abstractmethod
+    def week_net(self, d1, d2, min_net): ...           # -> [(sym, tong_net d1..d2)] DESC, |net|>min_net
+
+    @abstractmethod
     def market_net(self, ts): ...                      # -> tong day_net toan thi truong tai ts (VND)
 
     @abstractmethod
