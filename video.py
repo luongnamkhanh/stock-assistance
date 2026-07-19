@@ -525,9 +525,17 @@ def frames(video=None):
     return out
 
 
-def send_video(path):
+def send_video(path, caption="🎬 Video khối ngoại hôm nay"):
     tg = TelegramBot(load_config())
-    tg.send_video(tg.cfg["chat_ids"][0], path, "🎬 Video khối ngoại hôm nay")
+    tg.send_video(tg.cfg["chat_ids"][0], path, caption)
+
+
+def _caption():
+    if "--part2" in sys.argv:
+        return "🎬 Video tuần — phần 2 smart money (đăng CN)"
+    if "--weekly" in sys.argv:
+        return "🎬 Video tuần — phần 1 tổng kết (đăng thứ 7)"
+    return "🎬 Video khối ngoại hôm nay"
 
 
 def render_frame(t, ctx, timeline, karaoke):
@@ -654,11 +662,11 @@ if __name__ == "__main__":
     elif "--frames" in sys.argv:
         frames()
     elif "--send" in sys.argv:  # gui ban moi nhat cua ngay, khong render lai
-        send_video(day_dir() / "daily.mp4")
+        send_video(day_dir() / "daily.mp4", _caption())
         print("Đã gửi vào Telegram")
     else:
         path = make_video(weekly="--weekly" in sys.argv, part=2 if "--part2" in sys.argv else 1)
         print("Video:", path)
         if "--no-send" not in sys.argv:  # tele vua la noi duyet vua la archive
-            send_video(path)
+            send_video(path, _caption())
             print("Đã gửi vào Telegram")
