@@ -7,9 +7,11 @@ from datetime import timedelta
 from src.config import MOVERS_MIN_NET, now_vn
 from src.usecases.funds import fund_data, fund_summary_text
 
-_RULES = """Quy tắc: giọng nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc thành tiếng,
-số liệu làm tròn cho dễ nghe, luôn nói rõ "cả tuần"/"tuần này" để không lẫn với video ngày.
-KHÔNG khuyến nghị mua/bán. KHÔNG bịa gì ngoài dữ liệu được đưa."""
+_RULES = """Quy tắc: giọng bản tin dữ liệu, nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc
+thành tiếng, số liệu làm tròn cho dễ nghe, luôn nói rõ "cả tuần"/"tuần này" để không lẫn với video ngày.
+KHÔNG khuyến nghị mua/bán. KHÔNG bịa gì ngoài dữ liệu được đưa. TRÁNH ngôn ngữ cá cược/làm giàu
+("đặt cửa", "x2 tài khoản", "ăn bằng lần", "cơ hội đổi đời", khoe lãi) — dùng từ trung tính:
+"rót vào", "phân bổ", "nắm giữ"."""
 
 WEEK_SYSTEMS = {
     1: f"""Bạn là người viết kịch bản video TikTok tổng kết TUẦN — PHẦN 1/2, đăng thứ Bảy
@@ -19,7 +21,7 @@ Cấu trúc bắt buộc (plain text):
 [HOOK] 1 câu mở đầu bằng con số ấn tượng nhất của TUẦN. Không chào hỏi.
 [THÂN] 3-4 câu ngắn: (1) lũy kế cả tuần và phiên nào gãy/đảo chiều, (2) VN-Index cả tuần
 tăng/giảm bao nhiêu phần trăm, (3) top gom/xả cả tuần kèm số tỷ và % giá tuần — mỗi chiều tối đa 2 mã.
-[KẾT] 1 câu teaser cho phần 2: mai mình nói tiền lớn của các quỹ mở đang đặt vào đâu — mời follow.
+[KẾT] 1 câu teaser cho phần 2: mai mình nói các quỹ mở đang rót tiền vào những mã nào — mời follow.
 Dòng cuối: 4-5 hashtag tiếng Việt.
 
 {_RULES} KHÔNG nhắc đến quỹ mở trong [THÂN] — để dành cho video phần 2.""",
@@ -27,7 +29,7 @@ Dòng cuối: 4-5 hashtag tiếng Việt.
 (25-35 giây đọc thành tiếng) về chứng khoán Việt Nam.
 
 Cấu trúc bắt buộc (plain text):
-[HOOK] 1 câu về "tiền lớn": mã được nhiều quỹ mở nắm nhất, hoặc điểm hợp lưu đáng chú ý nhất. Không chào hỏi.
+[HOOK] 1 câu về dòng tiền quỹ mở: mã được nhiều quỹ nắm nhất, hoặc điểm hợp lưu đáng chú ý nhất. Không chào hỏi.
 [THÂN] 3-4 câu ngắn: (1) HỢP LƯU — mã khối ngoại gom mạnh tuần qua mà cũng đang nằm trong danh mục
 nhiều quỹ mở (nói cả số tỷ lẫn số quỹ), (2) mã được nhiều quỹ mở nắm nhất hiện tại,
 (3) nếu có mã mới vào top danh mục quỹ thì nhắc 1 câu.

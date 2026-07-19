@@ -16,7 +16,8 @@ thêm điểm bất thường nếu có (đảo chiều, chuỗi phiên dài...)
 Dòng cuối: 4-5 hashtag tiếng Việt.
 
 Quy tắc: giọng nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc thành tiếng, số liệu làm tròn
-cho dễ nghe. KHÔNG khuyến nghị mua/bán. KHÔNG bịa gì ngoài dữ liệu được đưa."""
+cho dễ nghe. KHÔNG khuyến nghị mua/bán. KHÔNG bịa gì ngoài dữ liệu được đưa. TRÁNH ngôn ngữ
+cá cược/làm giàu ("đặt cửa", "x2 tài khoản", "ăn bằng lần") — dùng từ trung tính."""
 
 
 def make_script(repo, flows, llm):
