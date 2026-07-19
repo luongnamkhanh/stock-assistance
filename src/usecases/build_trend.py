@@ -33,13 +33,16 @@ def trend_ctx(sym, repo, flows):
 
 
 def fund_ctx(sym, repo):
-    """Dong hop luu quy mo cho 1 ma: n quy dang nam + bien dong vs thang truoc."""
+    """Dong hop luu quy mo cho 1 ma: n quy dang nam + delta thang + TB %NAV + tro /fund."""
     months = repo.fund_months()
     if not months:
         return ""
-    n = len(repo.funds_holding(sym, months[-1]))
+    rows = repo.funds_holding(sym, months[-1])
+    if not rows:
+        return ""
     prev = len(repo.funds_holding(sym, months[-2])) if len(months) > 1 else None
-    return presenters.fund_line(n, None if prev is None else n - prev)
+    avg = sum(p for _, p in rows) / len(rows)
+    return presenters.fund_line(len(rows), None if prev is None else len(rows) - prev, avg, sym)
 
 
 def top_movers(repo, n=3):
