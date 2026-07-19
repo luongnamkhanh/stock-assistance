@@ -164,6 +164,16 @@ def top_movers_text(rows):
     return out
 
 
+def fund_line(n, delta):
+    """1 dong hop luu cho alert//trend: bao nhieu quy mo dang nam (top 10). n=0 -> ""."""
+    if not n:
+        return ""
+    d = ""
+    if delta:
+        d = f" (▲{delta} tháng này)" if delta > 0 else f" (▼{-delta} tháng này)"
+    return f"\n🏦 {n} quỹ mở đang nắm trong top 10 danh mục{d}"
+
+
 def fund_stock_text(sym, month, rows):
     """rows: [(fund, pct)] cac quy dang co sym trong top 10 danh muc."""
     if not rows:
@@ -172,6 +182,23 @@ def fund_stock_text(sym, month, rows):
     lines = "\n".join(f"• {f}: {p:.1f}% NAV" for f, p in rows)
     return (f"🏦 {sym} — trong top 10 danh mục của {len(rows)} quỹ mở (tháng {month}):\n{lines}\n"
             "(Nguồn: Fmarket, mỗi quỹ chỉ công bố top 10 khoản)")
+
+
+DIRECTION_LABEL = {"BUY": "Đột biến MUA", "SELL": "Đột biến BÁN",
+                   "ABUY": "Tăng tốc GOM", "ASELL": "Tăng tốc XẢ"}
+
+
+def scorecard_text(stats, days):
+    """stats tu scorecard.score -> bao cao chat luong tin hieu (kenh duyet)."""
+    if not stats:
+        return f"📈 Scorecard {days} ngày: chưa có tín hiệu nào đủ tuổi để chấm."
+    lines = [f"📈 Scorecard tín hiệu {days} ngày qua — giá sau N phiên, win = đi thuận chiều:"]
+    for d in sorted(stats):
+        for h in sorted(stats[d]):
+            avg, wr, n = stats[d][h]
+            lines.append(f"• {DIRECTION_LABEL.get(d, d)} — sau {h} phiên: TB {avg:+.1f}%, win {wr:.0%} ({n} tín hiệu)")
+    lines.append("Thông tin tham khảo — không phải khuyến nghị đầu tư.")
+    return "\n".join(lines)
 
 
 def script_msg(text):

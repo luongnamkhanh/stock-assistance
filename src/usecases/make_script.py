@@ -2,6 +2,7 @@
 Header + cap Telegram nam o noi gui (presenters.script_msg / TelegramBot.send_to)."""
 from src.config import now_vn
 from src.usecases.build_trend import trend_message
+from src.usecases.funds import fund_data
 
 SCRIPT_SYSTEM = """Bạn là người viết kịch bản video TikTok ngắn (30-40 giây đọc thành tiếng) về chứng khoán Việt Nam.
 Nhiệm vụ: từ dữ liệu giao dịch khối ngoại hôm nay, viết script cho 1 video.
@@ -28,6 +29,12 @@ def make_script(repo, flows, llm):
     if ts:  # % gia nhom GTGD lon — de script co the ke ve sac xanh/do (canh heatmap)
         heat = repo.heat(ts, 8)
         data += "\nGiá mã GTGD lớn hôm nay: " + ", ".join(f"{s} {p:+.1f}%" for s, p in heat)
+    fd = fund_data(repo)
+    if fd:  # hop luu quy mo — canh scene "funds" cua video
+        data += ("\nQuỹ mở đang nắm nhiều nhất (nguồn Fmarket, top 10 khoản/quỹ): "
+                 + ", ".join(f"{s} {n} quỹ" for s, n, _ in fd["rows"][:5]))
+        if fd["new"]:
+            data += "\nMã mới vào top danh mục quỹ tháng này: " + ", ".join(fd["new"])
     text = llm.complete(SCRIPT_SYSTEM, f"Dữ liệu phiên hôm nay:\n\n{data}\n\nViết script.").strip()
     repo.set_meta(key, text)
     return text

@@ -11,7 +11,7 @@ _ctx_day = None
 def trend_ctx(sym, repo, flows):
     """Loi mang/API -> chuoi rong (khong cache), alert van gui binh thuong. Chi giu phien
     DA CHOT (hom nay da co dong 'Ca phien' trong alert roi). Kem dac tinh phien gan nhat
-    tu day_story."""
+    tu day_story + hop luu quy mo (fund_line)."""
     global _ctx_day
     today = now_vn().date().isoformat()
     if _ctx_day != today:
@@ -25,10 +25,21 @@ def trend_ctx(sym, repo, flows):
         row = repo.last_story(sym, today)
         if row:
             out += presenters.story_line(row)
+        out += fund_ctx(sym, repo)
         _ctx_cache[sym] = out
         return out
     except Exception:
         return ""
+
+
+def fund_ctx(sym, repo):
+    """Dong hop luu quy mo cho 1 ma: n quy dang nam + bien dong vs thang truoc."""
+    months = repo.fund_months()
+    if not months:
+        return ""
+    n = len(repo.funds_holding(sym, months[-1]))
+    prev = len(repo.funds_holding(sym, months[-2])) if len(months) > 1 else None
+    return presenters.fund_line(n, None if prev is None else n - prev)
 
 
 def top_movers(repo, n=3):
@@ -65,4 +76,6 @@ def trend_message(code, repo, flows, movers=False):
         ts = repo.max_ts()
         if ts:
             text += presenters.top_movers_text(repo.top_net_full(ts, MOVERS_MIN_NET))
+    if code != "VNINDEX":
+        text += fund_ctx(code, repo)
     return text

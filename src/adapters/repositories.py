@@ -32,6 +32,9 @@ class SnapshotRepo(ABC):
     def add_alerts(self, rows): ...                    # rows: [(ts, sym, direction, net, share, price)]
 
     @abstractmethod
+    def alerts_since(self, day): ...                   # -> [(ts, sym, direction)] tu ngay day
+
+    @abstractmethod
     def get_regime(self, symbol, day): ...             # -> str ("NEUTRAL" neu chua co)
 
     @abstractmethod

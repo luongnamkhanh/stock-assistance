@@ -17,6 +17,7 @@ from src.infrastructure.telegram import TelegramBot
 from src.infrastructure.vndirect_api import VnDirect
 from src.usecases.detect_alerts import run_once
 from src.usecases.funds import maybe_pull_funds
+from src.usecases.scorecard import maybe_send_scorecard
 from src.usecases.summary import maybe_send_summary
 
 
@@ -53,6 +54,7 @@ def main():
             last_poll = time.time()
         maybe_send_summary(repo, flows, llm, tg)
         maybe_pull_funds(repo, tg)
+        maybe_send_scorecard(repo, flows, tg)
 
 
 if __name__ == "__main__":

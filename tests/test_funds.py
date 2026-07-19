@@ -53,6 +53,15 @@ def run():
     msg = fund_stock_message("AAA", r)
     assert "1 quỹ" in msg and "QA: 11.0% NAV" in msg, msg
     assert "không nắm" in fund_stock_message("XXX", r)
+
+    # hop luu: trend_ctx co dong quy (flows tra rong -> chi con fund_line; sym rieng tranh cache)
+    from src.usecases.build_trend import trend_ctx
+    class EmptyFlows:
+        def foreign_daily(self, code, n=10):
+            return []
+    hold(r, "2026-07", [("QA", "QZZ", 9, "Bank"), ("QB", "QZZ", 5, "Bank")])
+    ctx = trend_ctx("QZZ", r, EmptyFlows())
+    assert "2 quỹ mở" in ctx and "▲2" in ctx, ctx   # thang truoc 0 quy -> +2
     print("test_funds OK")
 
 

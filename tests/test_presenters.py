@@ -1,7 +1,7 @@
 from src.domain.entities import Accel, DayFlow, Spike
-from src.adapters.presenters import (accel_msg, ctx_line, format_trend, price_line,
-                                     range_line, spike_msg, story_line, top_movers_text,
-                                     trend_ctx_line)
+from src.adapters.presenters import (accel_msg, ctx_line, format_trend, fund_line, price_line,
+                                     range_line, scorecard_text, spike_msg, story_line,
+                                     top_movers_text, trend_ctx_line)
 
 def flows(vals, month="01"):
     return [DayFlow(f"2026-{month}-{i+1:02d}", v) for i, v in enumerate(vals)]
@@ -53,6 +53,16 @@ def run():
     assert "1,750.2 – 1,810.5 điểm" in ri, ri
     assert range_line("HPG", [], [], []) == ""
     assert range_line("HPG", [22000] * 5, [22500] * 5, [21500] * 5) == "", "du lieu mong -> khong ve hop"
+
+    # hop luu quy mo
+    assert fund_line(0, None) == "" and fund_line(0, 2) == ""
+    assert "27 quỹ mở" in fund_line(27, None) and "tháng này" not in fund_line(27, None)
+    assert "▲2" in fund_line(12, 2) and "▼1" in fund_line(12, -1) and "tháng này" not in fund_line(12, 0)
+
+    # scorecard
+    sc = scorecard_text({"ABUY": {5: (1.23, 0.67, 12)}}, 30)
+    assert "Tăng tốc GOM" in sc and "+1.2%" in sc and "67%" in sc and "12 tín hiệu" in sc, sc
+    assert "chưa có tín hiệu" in scorecard_text({}, 30)
     print("test_presenters OK")
 
 if __name__ == "__main__":

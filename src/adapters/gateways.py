@@ -18,6 +18,9 @@ class FlowHistory(ABC):
     @abstractmethod
     def index_quote(self): ...                 # -> {'close','change','pct'} | None neu loi
 
+    @abstractmethod
+    def daily_closes(self, code, n=30): ...    # -> [(date, close_VND)] cu -> moi
+
 
 class LLM(ABC):
     @abstractmethod

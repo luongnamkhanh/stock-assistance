@@ -55,6 +55,12 @@ class VnDirect(FlowHistory):
         k = 1 if code == "VNINDEX" else 1000  # stock_prices tra nghin dong -> chuan hoa VND tai nguon
         return ([r["close"] * k for r in rows], [r["high"] * k for r in rows], [r["low"] * k for r in rows])
 
+    def daily_closes(self, code, n=30):
+        """[(date, close_VND)] cu -> moi — cho scorecard tinh return sau tin hieu."""
+        url = f"{VND}/stock_prices?q=code:{code}&size={n}&sort=date:desc&fields=date,close"
+        rows = list(reversed(http_json(url, timeout=20)["data"]))
+        return [(r["date"], (r["close"] or 0) * 1000) for r in rows]
+
     def index_quote(self):
         """Diem VN-Index phien gan nhat: {'close','change','pct'} | None neu loi."""
         try:

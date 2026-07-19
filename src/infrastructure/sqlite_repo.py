@@ -130,6 +130,11 @@ class SqliteRepo(SnapshotRepo):
         return self.db.execute("SELECT 1 FROM alerts WHERE symbol=? AND direction=? AND ts>?",
                                (symbol, direction, cutoff)).fetchone() is not None
 
+    def alerts_since(self, day):
+        """[(ts, symbol, direction)] tu ngay `day` (cho scorecard)."""
+        return self.db.execute("SELECT ts, symbol, direction FROM alerts WHERE ts >= ? ORDER BY ts",
+                               (day,)).fetchall()
+
     def add_alerts(self, rows):
         self.db.executemany(
             "INSERT INTO alerts (ts,symbol,direction,net_10m,share,price) VALUES (?,?,?,?,?,?)", rows)

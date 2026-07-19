@@ -28,6 +28,7 @@ from src.infrastructure.sqlite_repo import SqliteRepo
 from src.infrastructure.telegram import TelegramBot
 from src.infrastructure.vndirect_api import VnDirect
 from src.usecases.build_trend import top_movers
+from src.usecases.funds import fund_data
 from src.infrastructure.llm import LlmClient
 from src.usecases.make_script import make_script
 
@@ -215,6 +216,34 @@ def scene_movers(img, ctx, ts, dur):
         y += 160
 
 
+def scene_funds(img, ctx, ts, dur):
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 240), "QUỸ MỞ ĐANG NẮM", font=_font(52), fill=FG, anchor="mm")
+    fd = ctx.get("funds")
+    if not fd:
+        return
+    d.text((W / 2, 310), f"nguồn Fmarket — tháng {fd['month'][5:]}/{fd['month'][:4]}, top 10 khoản mỗi quỹ",
+           font=_font(28, bold=False), fill=DIM, anchor="mm")
+    rows = fd["rows"][:7]
+    peak = rows[0][1] if rows else 1
+    y = 400
+    for i, (sym, n, delta) in enumerate(rows):
+        g = ease((ts - 0.15 - i * 0.08) / 0.35)
+        if g <= 0:
+            y += 140
+            continue
+        d.text((100, y + 34), sym, font=_font(46), fill=FG, anchor="lm")
+        w = max(int(n / peak * 500 * g), 24)  # cap 500 de label "N quỹ" khong cham delta ben phai
+        d.rounded_rectangle([260, y + 4, 260 + w, y + 64], radius=12, fill=mix(BG, GREEN, 0.55))
+        d.text((280 + w, y + 34), f"{n} quỹ", font=_font(38), fill=FG, anchor="lm")
+        if delta and g >= 1:
+            up = delta > 0
+            d.text((W - 90, y + 34), f"{'▲' if up else '▼'}{abs(delta)}",
+                   font=_font(36), fill=GREEN if up else RED, anchor="rm")
+        y += 140
+
+
 def scene_outro(img, ctx, ts, dur):
     from PIL import ImageDraw
     d = ImageDraw.Draw(img)
@@ -230,7 +259,7 @@ def scene_outro(img, ctx, ts, dur):
 
 
 SCENES = {"hook": scene_hook, "chart": scene_chart, "heatmap": scene_heatmap,
-          "movers": scene_movers, "outro": scene_outro}
+          "movers": scene_movers, "funds": scene_funds, "outro": scene_outro}
 
 
 @lru_cache(maxsize=None)
@@ -318,6 +347,7 @@ def hook_number(text, fallback):
 TREND_RE = re.compile(r"\d+\s*phiên|liên tiếp|chuỗi|lũy kế|đảo chiều|hạ nhiệt|xu hướng", re.I)
 HEAT_RE = re.compile(r"%|phần trăm|sắc xanh|sắc đỏ|nhuộm|bứt phá|tăng trần|giảm sàn|tăng giá|giảm giá", re.I)
 FLOW_RE = re.compile(r"gom|xả|mua|bán|\btỷ\b", re.I)  # cau noi dong tien (vs cau thuan % gia)
+FUND_RE = re.compile(r"quỹ", re.I)                    # cau noi quy mo -> scene funds
 
 
 def plan_scenes(hook, than, ket, symbols):
@@ -330,7 +360,9 @@ def plan_scenes(hook, than, ket, symbols):
         s = s.strip()
         if not s:
             continue
-        if sym_re and sym_re.search(s):
+        if FUND_RE.search(s):
+            sc = "funds"   # uu tien truoc sym: "quỹ gom HPG" van la chuyen quy
+        elif sym_re and sym_re.search(s):
             # co ten ma nhung thuan % gia (khong gom/xa/ty) -> van la noi dung heatmap
             sc = "heatmap" if HEAT_RE.search(s) and not FLOW_RE.search(s) else "movers"
         elif TREND_RE.search(s):
@@ -375,7 +407,7 @@ def build_ctx(repo):
     gom, xa = top_movers(repo)
     return {"net_ty": rows[-1].net_val / 1e9, "date": rows[-1].trading_date,
             "index": vnd.index_quote(), "rows": rows,
-            "heat": heatmap_rows(repo), "gom": gom, "xa": xa}
+            "heat": heatmap_rows(repo), "gom": gom, "xa": xa, "funds": fund_data(repo)}
 
 
 def stage_script(repo, force=False):
@@ -522,8 +554,11 @@ def preview():
              0.7, -0.3, 1.1, -1.8, 0.9, 2.8, -2.1, 0.4, -0.6, 1.5))),
         "gom": [("HPG", 120e9, 22300, 1.2), ("FPT", 85e9, 98700, 3.1), ("SSI", 40e9, 31200, 2.4)],
         "xa": [("VND", -95e9, 15600, -3.5), ("VIC", -70e9, 41800, -2.3), ("DGC", -33e9, 88000, -2.1)],
+        "funds": {"month": "2026-07", "rows": [("HPG", 27, 2), ("CTG", 25, -1), ("MWG", 23, 0),
+                                               ("MBB", 20, None), ("TCB", 19, 3), ("VCB", 17, None),
+                                               ("ACB", 15, 1)], "new": ["VIX"], "out": []},
     }
-    timeline = build_timeline(["hook", "chart", "heatmap", "movers", "outro"], [4.0] * 5)
+    timeline = build_timeline(["hook", "chart", "heatmap", "movers", "funds", "outro"], [4.0] * 6)
     demo = chunks_with_times(
         "Đây là caption karaoke chạy thử để xem vị trí vùng an toàn phía dưới", 0, 20)
     pdir = OUT / "preview"
@@ -559,6 +594,10 @@ def selftest():
     segs = plan_scenes("Mở đầu.", "VHM bứt phá 5%, VIC và ACB cùng tăng gần 3%. "
                        "Họ gom mạnh VIC 253 tỷ.", "Kết.", ["VIC", "VHM", "ACB"])
     assert [s for s, _ in segs] == ["hook", "heatmap", "movers", "outro"], segs
+
+    segs = plan_scenes("Mở đầu.", "Các quỹ mở đang nắm HPG nhiều nhất, 27 quỹ trong danh mục. "
+                       "Họ gom VIC 250 tỷ.", "Kết.", ["HPG", "VIC"])
+    assert [s for s, _ in segs] == ["hook", "funds", "movers", "outro"], segs
 
     assert hook_number("Khối ngoại xả ròng hơn 4.600 tỷ đồng!", -29) == -4600
     assert hook_number("Họ gom 1,5 nghìn tỷ hôm nay", -29) == 1500
