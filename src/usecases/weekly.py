@@ -5,7 +5,7 @@ duyet sang thu 7, video local (video.py --weekly [--part2]) dung dung ban do."""
 from datetime import timedelta
 
 from src.config import MOVERS_MIN_NET, now_vn
-from src.usecases.funds import fund_data, fund_summary_text
+from src.usecases.funds import fund_data, fund_summary_text, holders_of
 
 _RULES = """Quy tắc: giọng bản tin dữ liệu, nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc
 thành tiếng, số liệu làm tròn cho dễ nghe, luôn nói rõ "cả tuần"/"tuần này" để không lẫn với video ngày.
@@ -92,7 +92,9 @@ def weekly_ctx(repo, flows):
     return {"net_ty": sum(f.net_val for f in rows) / 1e9,
             "date": f"Tuần {d1[8:]}/{d1[5:7]} – {d2[8:]}/{d2[5:7]}/{d2[:4]}",
             "index": index, "rows": rows, "heat": [(s, p) for s, _, _, p in gom + xa],
-            "gom": gom, "xa": xa, "funds": fund_data(repo), "week": True}
+            "gom": gom, "xa": xa, "funds": fund_data(repo), "week": True,
+            "fusion": {"gom": [(s, v, holders_of(repo, s)) for s, v, _, _ in gom],
+                       "xa": [(s, v, holders_of(repo, s)) for s, v, _, _ in xa]}}
 
 
 def _week_data(repo, flows, d1, d2, part):

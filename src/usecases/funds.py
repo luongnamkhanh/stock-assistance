@@ -34,6 +34,12 @@ def fund_data(repo):
             "out": [s for s in before if s not in syms][:6]}
 
 
+def holders_of(repo, sym):
+    """So quy mo dang nam sym trong thang chup moi nhat (0 neu chua co du lieu)."""
+    months = repo.fund_months()
+    return len(repo.funds_holding(sym, months[-1])) if months else 0
+
+
 def fund_summary_text(repo):
     """2 dong data quy cho script video (ngay + tuan). "" neu chua co du lieu."""
     fd = fund_data(repo)

@@ -28,10 +28,10 @@ from src.infrastructure.sqlite_repo import SqliteRepo
 from src.infrastructure.telegram import TelegramBot
 from src.infrastructure.vndirect_api import VnDirect
 from src.usecases.build_trend import top_movers
-from src.usecases.funds import fund_data
+from src.usecases.funds import fund_data, holders_of
 from src.infrastructure.llm import LlmClient
 from src.usecases.make_script import make_script
-from src.usecases.weekly import make_week_script, weekly_ctx
+from src.usecases.weekly import make_week_script, week_movers, week_range, weekly_ctx
 
 load_env()
 
@@ -220,6 +220,33 @@ def scene_movers(img, ctx, ts, dur):
         y += 160
 
 
+def scene_fusion(img, ctx, ts, dur):
+    """Hop luu: net khoi ngoai x so quy mo dang nam — metric dat nhat cua lop quy."""
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    d.text((W / 2, 240), "KHỐI NGOẠI × QUỸ MỞ", font=_font(52), fill=FG, anchor="mm")
+    fu = ctx.get("fusion")
+    if not fu:
+        return
+    d.text((W / 2, 310), ("net tuần" if ctx.get("week") else "net hôm nay")
+           + " của khối ngoại · số quỹ mở đang nắm (top 10 danh mục)",
+           font=_font(28, bold=False), fill=DIM, anchor="mm")
+    cards = ([("GOM", *r, GREEN) for r in fu["gom"]] + [("XẢ", *r, RED) for r in fu["xa"]])[:6]
+    y = 400
+    for i, (tag, sym, net, n, color) in enumerate(cards):
+        g = ease((ts - 0.15 - i * 0.12) / 0.3)
+        if g <= 0:
+            y += 160
+            continue
+        x = 90 + int((1 - g) * 500)
+        d.rounded_rectangle([x, y, x + W - 180, y + 140], radius=18, fill=(28, 32, 42))
+        d.rectangle([x, y, x + 14, y + 140], fill=color)
+        d.text((x + 50, y + 70), f"{tag} {sym}", font=_font(54), fill=FG, anchor="lm")
+        d.text((x + 430, y + 70), f"{net / 1e9:+,.0f} tỷ", font=_font(48), fill=color, anchor="lm")
+        d.text((x + W - 240, y + 70), f"{n} quỹ", font=_font(40), fill=FG, anchor="rm")
+        y += 160
+
+
 def scene_funds(img, ctx, ts, dur):
     from PIL import ImageDraw
     d = ImageDraw.Draw(img)
@@ -263,7 +290,8 @@ def scene_outro(img, ctx, ts, dur):
 
 
 SCENES = {"hook": scene_hook, "chart": scene_chart, "heatmap": scene_heatmap,
-          "movers": scene_movers, "funds": scene_funds, "outro": scene_outro}
+          "movers": scene_movers, "funds": scene_funds, "fusion": scene_fusion,
+          "outro": scene_outro}
 
 
 @lru_cache(maxsize=None)
@@ -365,7 +393,8 @@ def plan_scenes(hook, than, ket, symbols):
         if not s:
             continue
         if FUND_RE.search(s):
-            sc = "funds"   # uu tien truoc sym: "quỹ gom HPG" van la chuyen quy
+            # cau hop luu (co ma + dong tien) -> fusion; cau xep hang/tong quan quy -> funds
+            sc = "fusion" if (sym_re and sym_re.search(s) and FLOW_RE.search(s)) else "funds"
         elif sym_re and sym_re.search(s):
             # co ten ma nhung thuan % gia (khong gom/xa/ty) -> van la noi dung heatmap
             sc = "heatmap" if HEAT_RE.search(s) and not FLOW_RE.search(s) else "movers"
@@ -411,7 +440,9 @@ def build_ctx(repo):
     gom, xa = top_movers(repo)
     return {"net_ty": rows[-1].net_val / 1e9, "date": rows[-1].trading_date,
             "index": vnd.index_quote(), "rows": rows,
-            "heat": heatmap_rows(repo), "gom": gom, "xa": xa, "funds": fund_data(repo)}
+            "heat": heatmap_rows(repo), "gom": gom, "xa": xa, "funds": fund_data(repo),
+            "fusion": {"gom": [(s, v, holders_of(repo, s)) for s, v, *_ in gom],
+                       "xa": [(s, v, holders_of(repo, s)) for s, v, *_ in xa]}}
 
 
 def stage_script(repo, force=False, weekly=False, part=1):
@@ -430,7 +461,7 @@ def stage_script(repo, force=False, weekly=False, part=1):
     return text
 
 
-def stage_tts(repo, script, force=False):
+def stage_tts(repo, script, force=False, weekly=False):
     """Stage 2 — chot voice: scene plan (segs.json) + TTS tung doan (s{i}.wav).
     Da co du artifact thi dung lai; thieu wav nao (crash giua chung) thi TTS bu."""
     d = day_dir()
@@ -438,7 +469,11 @@ def stage_tts(repo, script, force=False):
     if segs_f.exists() and not force:
         segs = [tuple(x) for x in json.loads(segs_f.read_text())]
     else:
-        gom, xa = top_movers(repo)
+        if weekly:  # syms de route cau -> scene phai la movers TUAN, khong phai ngay
+            d1, d2 = week_range(now_vn())
+            gom, xa = week_movers(repo, VnDirect(), d1, d2)
+        else:
+            gom, xa = top_movers(repo)
         segs = plan_scenes(*split_script(script), [s for s, *_ in gom + xa])
         segs_f.write_text(json.dumps(segs, ensure_ascii=False))
     wavs = []
@@ -491,7 +526,7 @@ def make_video(weekly=False, part=1):
     repo = SqliteRepo(DB)
     fresh = "--fresh" in sys.argv  # chot lai script + voice (mac dinh: dung ban da chot)
     script = stage_script(repo, force=fresh, weekly=weekly, part=part)
-    segs, wavs = stage_tts(repo, script, force=fresh)
+    segs, wavs = stage_tts(repo, script, force=fresh, weekly=weekly)
     return stage_render(repo, segs, wavs, weekly=weekly)
 
 
@@ -573,8 +608,10 @@ def preview():
         "funds": {"month": "2026-07", "rows": [("HPG", 27, 2), ("CTG", 25, -1), ("MWG", 23, 0),
                                                ("MBB", 20, None), ("TCB", 19, 3), ("VCB", 17, None),
                                                ("ACB", 15, 1)], "new": ["VIX"], "out": []},
+        "fusion": {"gom": [("HPG", 120e9, 27), ("FPT", 85e9, 12), ("SSI", 40e9, 9)],
+                   "xa": [("VND", -95e9, 5), ("VIC", -70e9, 8), ("DGC", -33e9, 3)]},
     }
-    timeline = build_timeline(["hook", "chart", "heatmap", "movers", "funds", "outro"], [4.0] * 6)
+    timeline = build_timeline(["hook", "chart", "heatmap", "movers", "funds", "fusion", "outro"], [4.0] * 7)
     demo = chunks_with_times(
         "Đây là caption karaoke chạy thử để xem vị trí vùng an toàn phía dưới", 0, 20)
     pdir = OUT / "preview"
@@ -618,6 +655,10 @@ def selftest():
     segs = plan_scenes("Hook.", "Cả tuần khối ngoại xả hơn 3.400 tỷ. Họ gom VIC 250 tỷ.",
                        "Kết.", ["VIC"])
     assert [s for s, _ in segs] == ["hook", "chart", "movers", "outro"], segs  # "tuần" -> chart
+
+    segs = plan_scenes("Hook.", "ACB được khối ngoại mua ròng 176 tỷ và 15 quỹ mở đang nắm. "
+                       "Các quỹ nắm nhiều nhất vẫn là HPG.", "Kết.", ["ACB"])
+    assert [s for s, _ in segs] == ["hook", "fusion", "funds", "outro"], segs
 
     assert hook_number("Khối ngoại xả ròng hơn 4.600 tỷ đồng!", -29) == -4600
     assert hook_number("Họ gom 1,5 nghìn tỷ hôm nay", -29) == 1500
