@@ -225,6 +225,12 @@ class SqliteRepo(SnapshotRepo):
                             [(month, *r) for r in snapshots])
         self.db.commit()
 
+    def fund_report_month(self, month):
+        """(min, max) ky bao cao danh muc thuc te cua thang chup — None neu chua co."""
+        r = self.db.execute("SELECT MIN(report_month), MAX(report_month) FROM fund_snapshot WHERE month=?",
+                            (month,)).fetchone()
+        return r if r and r[0] else None
+
     def has_fund_month(self, month):
         """Thang do da chup DAY DU chua (fund_snapshot la bang chi co o ban pull moi)."""
         return self.db.execute("SELECT 1 FROM fund_snapshot WHERE month=? LIMIT 1",

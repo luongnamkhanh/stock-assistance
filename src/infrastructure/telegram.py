@@ -21,19 +21,27 @@ class TelegramBot(Telegram):
             headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=15)
 
-    def send_photo(self, chat_id, png, caption=""):
-        """Gui anh PNG (bytes) — multipart tu dung bang stdlib (curl khong chac co tren Railway)."""
-        b = "----tg-photo-boundary"
+    def _send_file(self, method, field, filename, mime, data, chat_id, caption):
+        """Multipart tu dung bang stdlib (curl khong chac co tren Railway)."""
+        b = "----tg-file-boundary"
         body = b"".join([
             f'--{b}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'.encode(),
             f'--{b}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode(),
-            (f'--{b}\r\nContent-Disposition: form-data; name="photo"; filename="daily.png"\r\n'
-             'Content-Type: image/png\r\n\r\n').encode(),
-            png, f"\r\n--{b}--\r\n".encode()])
+            (f'--{b}\r\nContent-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
+             f'Content-Type: {mime}\r\n\r\n').encode(),
+            data, f"\r\n--{b}--\r\n".encode()])
         req = urllib.request.Request(
-            f"https://api.telegram.org/bot{self.cfg['token']}/sendPhoto", data=body,
+            f"https://api.telegram.org/bot{self.cfg['token']}/{method}", data=body,
             headers={"Content-Type": f"multipart/form-data; boundary={b}"})
-        urllib.request.urlopen(req, timeout=30)
+        urllib.request.urlopen(req, timeout=60)
+
+    def send_photo(self, chat_id, png, caption=""):
+        """Gui anh PNG (bytes)."""
+        self._send_file("sendPhoto", "photo", "daily.png", "image/png", png, chat_id, caption)
+
+    def send_document(self, chat_id, data, filename, caption=""):
+        """Gui file dinh kem (bytes) — vd dashboard.html."""
+        self._send_file("sendDocument", "document", filename, "text/html", data, chat_id, caption)
 
     def broadcast_photo(self, png, caption=""):
         """Gui anh den moi chat_id da cau hinh. False neu chua config."""

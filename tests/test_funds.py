@@ -52,6 +52,8 @@ def run():
 
     msg = fund_stock_message("AAA", r)
     assert "1 quỹ" in msg and "QA: 11.0% NAV" in msg, msg
+    assert "▼1 so với tháng trước" in msg, msg          # thang truoc 2 quy -> con 1
+    assert "Tỷ trọng trung bình: 11.0% NAV" in msg and "kỳ báo cáo 2026-05" in msg, msg
     assert "không nắm" in fund_stock_message("XXX", r)
 
     # hop luu: trend_ctx co dong quy (flows tra rong -> chi con fund_line; sym rieng tranh cache)

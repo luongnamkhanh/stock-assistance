@@ -77,6 +77,9 @@ class SnapshotRepo(ABC):
     def has_fund_month(self, month): ...               # -> bool: thang do da chup day du chua
 
     @abstractmethod
+    def fund_report_month(self, month): ...            # -> (min, max) ky bao cao | None
+
+    @abstractmethod
     def fund_months(self): ...                         # -> list[str 'YYYY-MM'] tang dan
 
     @abstractmethod

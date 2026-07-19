@@ -2,6 +2,8 @@
 import time
 
 from src.adapters import chart, presenters
+from src.config import now_vn
+from src.dashboard import build_html
 from src.usecases.build_brief import build_brief
 from src.usecases.build_trend import market_snapshot, trend_message
 from src.usecases.funds import fund_data, fund_stock_message
@@ -69,6 +71,16 @@ def handle_updates(repo, tg, flows, llm, wait=25):
                         tg.send_to(chat_id, "Chưa có dữ liệu quỹ (bot chụp danh mục Fmarket từ ngày 15 hàng tháng).")
             except Exception as e:
                 tg.send_to(chat_id, f"Không lấy được dữ liệu quỹ ({e})")
+        elif cmd == "/DASHBOARD":
+            try:
+                if repo.fund_months():
+                    tg.send_document(chat_id, build_html().encode(),
+                                     f"dashboard-{now_vn().date().isoformat()}.html",
+                                     "📊 Dashboard quỹ đầy đủ — tải về rồi mở bằng trình duyệt")
+                else:
+                    tg.send_to(chat_id, "Chưa có dữ liệu quỹ (bot chụp danh mục Fmarket từ ngày 15 hàng tháng).")
+            except Exception as e:
+                tg.send_to(chat_id, f"Không tạo được dashboard ({e})")
         elif cmd == "/CHART":
             try:
                 ctx = market_snapshot(repo, flows)

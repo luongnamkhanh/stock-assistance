@@ -9,6 +9,7 @@ HELP_TEXT = """📖 Lệnh của bot:
 /chart — ảnh dashboard khối ngoại phiên gần nhất
 /fund — mã nào đang được nhiều quỹ mở nắm nhất (Fmarket, cập nhật hàng tháng)
 /fund MÃ — quỹ mở nào đang có mã này trong top 10 danh mục
+/dashboard — file dashboard đầy đủ metric quỹ (coverage, phân bổ, NAV) — mở bằng trình duyệt
 /brief MÃ — bản tin AI tổng hợp: dòng tiền + định giá + tin tức (~30 giây)
 /script — kịch bản video TikTok từ diễn biến khối ngoại hôm nay
 /watch MÃ — theo dõi mã (ngưỡng alert giảm một nửa)
@@ -174,14 +175,23 @@ def fund_line(n, delta):
     return f"\n🏦 {n} quỹ mở đang nắm trong top 10 danh mục{d}"
 
 
-def fund_stock_text(sym, month, rows):
-    """rows: [(fund, pct)] cac quy dang co sym trong top 10 danh muc."""
+def fund_stock_text(sym, month, rows, prev_n=None, report_month=None):
+    """rows: [(fund, pct)] cac quy dang co sym trong top 10 danh muc.
+    prev_n: so quy thang truoc (None = chua co); report_month: (min, max) ky bao cao."""
     if not rows:
         return (f"Không quỹ mở nào (trên Fmarket) có {sym} trong top 10 danh mục tháng {month}.\n"
                 "Lưu ý: quỹ chỉ công bố 10 khoản lớn nhất — không thấy ≠ không nắm.")
+    head = f"🏦 {sym} — trong top 10 danh mục của {len(rows)} quỹ mở"
+    if prev_n is not None and len(rows) != prev_n:
+        d = len(rows) - prev_n
+        head += f" ({'▲' if d > 0 else '▼'}{abs(d)} so với tháng trước)"
+    avg = sum(p for _, p in rows) / len(rows)
     lines = "\n".join(f"• {f}: {p:.1f}% NAV" for f, p in rows)
-    return (f"🏦 {sym} — trong top 10 danh mục của {len(rows)} quỹ mở (tháng {month}):\n{lines}\n"
-            "(Nguồn: Fmarket, mỗi quỹ chỉ công bố top 10 khoản)")
+    src = "(Nguồn: Fmarket, mỗi quỹ chỉ công bố top 10 khoản"
+    if report_month:
+        lo, hi = report_month
+        src += f", kỳ báo cáo {lo}" + (f"–{hi}" if hi != lo else "")
+    return f"{head}\nTỷ trọng trung bình: {avg:.1f}% NAV mỗi quỹ\n{lines}\n{src})"
 
 
 DIRECTION_LABEL = {"BUY": "Đột biến MUA", "SELL": "Đột biến BÁN",

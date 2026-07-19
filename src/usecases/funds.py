@@ -56,7 +56,10 @@ def fund_stock_message(sym, repo):
     months = repo.fund_months()
     if not months:
         return "Chưa có dữ liệu quỹ (bot chụp danh mục Fmarket từ ngày 15 hàng tháng)."
-    return presenters.fund_stock_text(sym, months[-1], repo.funds_holding(sym, months[-1]))
+    m = months[-1]
+    prev_n = len(repo.funds_holding(sym, months[-2])) if len(months) > 1 else None
+    return presenters.fund_stock_text(sym, m, repo.funds_holding(sym, m),
+                                      prev_n, repo.fund_report_month(m))
 
 
 def maybe_pull_funds(repo, tg):
