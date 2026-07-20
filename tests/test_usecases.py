@@ -1,5 +1,9 @@
+from datetime import datetime
+
+from src.config import VN_TZ
 from src.infrastructure.sqlite_repo import SqliteRepo
 from src.usecases.detect_alerts import detect_accel, detect_spikes, detect_states
+from src.usecases.summary import maybe_send_open
 
 class NoFlows:                       # FlowHistory cam: trend_ctx -> "" nhu khi API loi
     def foreign_daily(self, code, n=10):
@@ -41,6 +45,27 @@ def run():
     assert len(msgs) == 1 and "BBB" in msgs[0] and "TĂNG TỐC" in msgs[0], msgs
     assert "1.2 → 2.7 → 5.0" in msgs[0] and "Cả phiên" in msgs[0], msgs
     assert detect_accel(r2, F, f"{day}T10:15:00+07:00", set()) == [], "cooldown accel"
+
+    # nhip tim dau phien: 1 lan/ngay, chi trong cua so 09:15-10:00, can snapshot hom nay
+    class Tg:
+        sent = []
+        cfg = {"token": "t", "chat_ids": [7]}
+        def broadcast(self, text):
+            self.sent.append(text)
+    r4, tg = SqliteRepo(":memory:"), Tg()
+    at = lambda h, m: datetime(2026, 1, 5, h, m, tzinfo=VN_TZ)  # thu 2
+    snap(r4, "2026-01-05T09:14:00+07:00", "AAA", 9e9, sell=2e9)
+    maybe_send_open(r4, tg, now=at(9, 10))
+    assert tg.sent == [], "truoc 09:15 chua gui"
+    maybe_send_open(r4, tg, now=at(9, 20))
+    assert len(tg.sent) == 1 and "Mở phiên 05/01" in tg.sent[0] and "mua ròng 7 tỷ" in tg.sent[0], tg.sent
+    assert "1/1 mã xanh" in tg.sent[0] and "1 mã HOSE" in tg.sent[0], tg.sent
+    maybe_send_open(r4, tg, now=at(9, 25))
+    assert len(tg.sent) == 1, "1 lan/ngay"
+    r5 = SqliteRepo(":memory:")
+    snap(r5, "2026-01-05T09:14:00+07:00", "AAA", 9e9)
+    maybe_send_open(r5, tg, now=at(10, 30))
+    assert len(tg.sent) == 1, "qua 10:00 khong gui muon"
     print("test_usecases OK")
 
 if __name__ == "__main__":

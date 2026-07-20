@@ -62,6 +62,9 @@ class SnapshotRepo(ABC):
     def market_net(self, ts): ...                      # -> tong day_net toan thi truong tai ts (VND)
 
     @abstractmethod
+    def snapshot_count(self, ts): ...                  # -> so ma trong snapshot ts
+
+    @abstractmethod
     def top_net_full(self, ts, min_net): ...           # -> [(sym, day_net, price, pct)] DESC, |net|>min_net
 
     @abstractmethod

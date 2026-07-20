@@ -195,6 +195,10 @@ class SqliteRepo(SnapshotRepo):
         return self.db.execute("SELECT SUM(buy_val - sell_val) FROM snapshots WHERE ts=?",
                                (ts,)).fetchone()[0]
 
+    def snapshot_count(self, ts):
+        """So ma trong snapshot ts (cho tin nhip tim dau phien)."""
+        return self.db.execute("SELECT COUNT(*) FROM snapshots WHERE ts=?", (ts,)).fetchone()[0]
+
     def top_net_full(self, ts, min_net):
         return self.db.execute(
             "SELECT symbol, buy_val - sell_val AS dn, price, COALESCE(pct, 0) "

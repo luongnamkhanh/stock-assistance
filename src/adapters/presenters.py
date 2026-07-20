@@ -217,5 +217,12 @@ def script_msg(text):
     return f"🎬 Script TikTok hôm nay:\n\n{text}"
 
 
+def open_msg(ts, net, ups, top_n, n_syms):
+    """Nhip tim dau phien: xac nhan bot dang quet + khong khi som — khong phai tin hieu."""
+    side = "mua" if net >= 0 else "bán"
+    return (f"🔔 Mở phiên {ts[8:10]}/{ts[5:7]} — lúc {ts[11:16]}: khối ngoại {side} ròng "
+            f"{abs(net) / 1e9:,.0f} tỷ · nhóm GTGD lớn {ups}/{top_n} mã xanh · đang quét {n_syms} mã HOSE")
+
+
 def alert_digest(ts, msgs):
     return f"📊 Khối ngoại — {ts[11:16]}\n\n" + "\n\n".join(msgs)
