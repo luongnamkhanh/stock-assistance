@@ -51,7 +51,8 @@ def maybe_send_summary(repo, flows, llm, tg):
             tg.broadcast_photo(chart.daily_png(ctx), f"📊 Khối ngoại {today}")
     except Exception as e:
         print(f"[{now.isoformat(timespec='seconds')}] chart failed: {e}")
-    try:
-        tg.broadcast(presenters.script_msg(make_script(repo, flows, llm)))
+    try:  # script TikTok la do noi bo (de render video) -> chi gui kenh duyet chat_ids[0], khong broadcast
+        if tg.cfg.get("chat_ids"):
+            tg.send_to(tg.cfg["chat_ids"][0], presenters.script_msg(make_script(repo, flows, llm)))
     except Exception as e:
         print(f"[{now.isoformat(timespec='seconds')}] script failed: {e}")  # script loi khong chan summary
