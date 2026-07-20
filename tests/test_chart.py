@@ -23,8 +23,8 @@ def run():
 
     from src.adapters.chart import fund_png
     fd = {"month": "2026-07",
-          "rows": [("MWG", 24, 2), ("FPT", 20, -1), ("ACB", 18, None), ("HPG", 12, 0)],
-          "new": ["VIX"], "out": ["PNJ", "DGC"]}
+          "rows": [("MWG", 24, 2, 1540e9), ("FPT", 20, -1, 990e9), ("ACB", 18, None), ("HPG", 12, 0)],
+          "new": ["VIX"], "out": ["PNJ", "DGC"]}  # tron 3/4 phan tu — chart phai chiu ca hai
     fp = fund_png(fd)
     assert fp[:4] == b"\x89PNG" and len(fp) > 15_000, len(fp)
     assert fund_png({"month": "2026-07", "rows": [], "new": [], "out": []})[:4] == b"\x89PNG"

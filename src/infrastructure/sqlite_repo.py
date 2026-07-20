@@ -252,9 +252,9 @@ class SqliteRepo(SnapshotRepo):
         return [r[0] for r in self.db.execute("SELECT DISTINCT month FROM fund_holdings ORDER BY month")]
 
     def fund_consensus(self, month):
-        """[(symbol, so_quy_nam, tong_pct)] DESC theo so quy."""
+        """[(symbol, so_quy_nam, tong_pct, tong_value_vnd)] DESC theo so quy."""
         return self.db.execute(
-            "SELECT symbol, COUNT(*) AS n, SUM(pct) FROM fund_holdings WHERE month=? "
+            "SELECT symbol, COUNT(*) AS n, SUM(pct), SUM(value) FROM fund_holdings WHERE month=? "
             "GROUP BY symbol ORDER BY n DESC, SUM(pct) DESC", (month,)).fetchall()
 
     def funds_holding(self, symbol, month):

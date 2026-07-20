@@ -86,7 +86,7 @@ class SnapshotRepo(ABC):
     def fund_months(self): ...                         # -> list[str 'YYYY-MM'] tang dan
 
     @abstractmethod
-    def fund_consensus(self, month): ...               # -> [(symbol, so_quy, tong_pct)] DESC
+    def fund_consensus(self, month): ...               # -> [(symbol, so_quy, tong_pct, tong_value)] DESC
 
     @abstractmethod
     def funds_holding(self, symbol, month): ...        # -> [(fund, pct)] DESC theo pct

@@ -99,14 +99,16 @@ def fund_png(data):
     else:
         peak = rows[0][1] or 1
         y = 330
-        for sym, n, delta in rows:
-            w = int(lerp(140, 620, n / peak))
+        for sym, n, delta, *rest in rows:
+            val = rest[0] if rest else None
+            w = int(lerp(140, 560, n / peak))
             d.rounded_rectangle([260, y - 28, 260 + w, y + 28], radius=12, fill=mix(BG, GREEN, 0.45))
             d.text((110, y), sym, font=_font(44), fill=FG, anchor="lm")
-            d.text((278, y), f"{n} quỹ", font=_font(34), fill=FG, anchor="lm")
+            d.text((278, y), f"{n} quỹ" + (f" · {val / 1e9:,.0f} tỷ" if val else ""),
+                   font=_font(34), fill=FG, anchor="lm")
             if delta:
                 up = delta > 0
-                d.text((950, y), f"{'▲' if up else '▼'}{abs(delta)}", font=_font(36),
+                d.text((980, y), f"{'▲' if up else '▼'}{abs(delta)}", font=_font(36),
                        fill=GREEN if up else RED, anchor="mm")
             y += 82
     if data["new"]:

@@ -259,7 +259,7 @@ def scene_funds(img, ctx, ts, dur):
     rows = fd["rows"][:7]
     peak = rows[0][1] if rows else 1
     y = 400
-    for i, (sym, n, delta) in enumerate(rows):
+    for i, (sym, n, delta, *_) in enumerate(rows):
         g = ease((ts - 0.15 - i * 0.08) / 0.35)
         if g <= 0:
             y += 140

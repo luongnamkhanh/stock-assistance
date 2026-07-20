@@ -177,8 +177,8 @@ const fmt = (v, d=1) => v == null ? "—" : v.toLocaleString("vi-VN", {minimumFr
 function consensus(m) {
   const map = new Map();
   for (const h of of("fund_holdings", m)) {
-    const e = map.get(h.symbol) || { n:0, sum:0, funds:[] };
-    e.n++; e.sum += h.pct || 0; e.funds.push(h); map.set(h.symbol, e);
+    const e = map.get(h.symbol) || { n:0, sum:0, val:0, funds:[] };
+    e.n++; e.sum += h.pct || 0; e.val += h.value || 0; e.funds.push(h); map.set(h.symbol, e);
   }
   return [...map.entries()].map(([symbol, e]) => ({ symbol, ...e }))
     .sort((a, b) => b.n - a.n || b.sum - a.sum);
@@ -212,8 +212,11 @@ function render() {
   // KPI
   const kp = $("#kpis"); kp.replaceChildren();
   const cashVals = rows.map(r => r.cash_pct).filter(v => v != null);
+  const aums = rows.map(r => r.aum).filter(v => v != null);
   const kpis = [
     ["Số quỹ trong bản chụp", rows.length, ""],
+    ["Tổng AUM", aums.length ? fmt(aums.reduce((a,b)=>a+b,0) / 1e12, 1) + " nghìn tỷ" : "—",
+     aums.length + "/" + rows.length + " quỹ có số liệu"],
     ["Số mã trong top 10", cons.length, ""],
     ["Tiền mặt trung bình", fmt(cashVals.reduce((a,b)=>a+b,0) / (cashVals.length||1)) + "%", "TB không trọng số"],
     ["Đồng thuận cao nhất", cons[0] ? cons[0].symbol + " · " + cons[0].n + " quỹ" : "—", ""],
@@ -231,7 +234,7 @@ function render() {
     r.append(el("div", "sym", c.symbol));
     const w = el("div", "barwrap"), bar = el("div", "bar");
     bar.style.width = (c.n / peak * 100 * 0.82) + "%";
-    w.append(bar, el("span", "bval", c.n + " quỹ"));
+    w.append(bar, el("span", "bval", c.n + " quỹ" + (c.val ? " · " + fmt(c.val / 1e9, 0) + " tỷ" : "")));
     r.append(w);
     const d = before ? c.n - (before.get(c.symbol) || 0) : null;
     r.append(el("div", "delta" + (d > 0 ? " up" : d < 0 ? " down" : ""),
@@ -297,7 +300,7 @@ function render() {
   }
 
   // funds table
-  const cols = [["fund","Quỹ",0],["owner_s","Cty quản lý",0],["stock_pct","% CP",1],
+  const cols = [["fund","Quỹ",0],["owner_s","Cty quản lý",0],["aum","AUM (tỷ)",1],["stock_pct","% CP",1],
     ["cash_pct","% Tiền",1],["coverage","Coverage top 10",1],
     ["nav_1m","NAV 1m",1],["nav_12m","NAV 12m",1],["nav_36m","NAV 36m",1]];
   const th = $("#funds thead"); th.replaceChildren();
@@ -318,6 +321,7 @@ function render() {
     const tr = el("tr");
     const tdF = el("td", "", r.fund); tdF.style.fontWeight = "650"; tr.append(tdF);
     const tdO = el("td", "", r.owner_s); tdO.title = r.owner || ""; tr.append(tdO);
+    tr.append(el("td", "num", r.aum == null ? "—" : fmt(r.aum / 1e9, 0)));
     tr.append(el("td", "num", fmt(r.stock_pct)), el("td", "num", fmt(r.cash_pct)));
     const tdC = el("td", "num");
     if (r.coverage != null) {

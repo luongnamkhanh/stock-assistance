@@ -19,18 +19,18 @@ def pull_holdings(repo, month):
 
 
 def fund_data(repo):
-    """Top ma theo so quy nam + bien dong vs thang truoc. None neu chua co du lieu.
-    delta=None: thang dau tien, chua co gi de so."""
+    """Top ma theo so quy nam + bien dong vs thang truoc + tong tien. None neu chua co du lieu.
+    delta=None: thang dau tien, chua co gi de so; val=None voi thang cu chua co value."""
     months = repo.fund_months()
     if not months:
         return None
     cur, prev = months[-1], (months[-2] if len(months) > 1 else None)
     con = repo.fund_consensus(cur)
-    before = {s: n for s, n, _ in repo.fund_consensus(prev)} if prev else {}
-    syms = {s for s, _, _ in con}
+    before = {s: n for s, n, *_ in repo.fund_consensus(prev)} if prev else {}
+    syms = {s for s, *_ in con}
     return {"month": cur,
-            "rows": [(s, n, (n - before.get(s, 0)) if prev else None) for s, n, _ in con[:10]],
-            "new": [s for s, _, _ in con if prev and s not in before][:6],
+            "rows": [(s, n, (n - before.get(s, 0)) if prev else None, v) for s, n, _, v in con[:10]],
+            "new": [s for s, *_ in con if prev and s not in before][:6],
             "out": [s for s in before if s not in syms][:6]}
 
 
@@ -46,7 +46,8 @@ def fund_summary_text(repo):
     if not fd:
         return ""
     out = ("\nQuỹ mở đang nắm nhiều nhất (nguồn Fmarket, top 10 khoản/quỹ): "
-           + ", ".join(f"{s} {n} quỹ" for s, n, _ in fd["rows"][:5]))
+           + ", ".join(f"{s} {n} quỹ" + (f" (tổng {v / 1e9:,.0f} tỷ)" if v else "")
+                       for s, n, _, v in fd["rows"][:5]))
     if fd["new"]:
         out += "\nMã mới vào top danh mục quỹ tháng này: " + ", ".join(fd["new"])
     return out
