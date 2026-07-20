@@ -35,6 +35,9 @@ def run():
     # thang dau: chua co gi de so -> delta None, khong new/out
     hold(r, "2026-06", [("QA", "AAA", 10, "Bank"), ("QB", "AAA", 5, "Bank"), ("QA", "DDD", 2, "Steel")])
     assert r.has_fund_month("2026-06")
+    # ban pull cu (aum NULL) = chua day du -> phai duoc chup bu
+    r.save_fund_month("2026-05", [], [], [], [("QX", "O", None, 1, None, None, None, None, None, None)])
+    assert not r.has_fund_month("2026-05"), "aum NULL -> coi nhu chua chup"
     d = fund_data(r)
     assert d["month"] == "2026-06" and d["rows"][0] == ("AAA", 2, None), d
     assert d["new"] == [] and d["out"] == []
