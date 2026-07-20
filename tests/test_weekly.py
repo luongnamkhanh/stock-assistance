@@ -53,8 +53,8 @@ def run():
     assert not hasattr(llm2, "user")
 
     # phan 2: hop luu khoi ngoai x quy
-    r.save_fund_month("2026-07", [("QA", "AAA", 10, ""), ("QB", "AAA", 5, "")], [], [],
-                      [(f, "Own", "2026-06", 1000, None, None, None, None, None) for f in ("QA", "QB")])
+    r.save_fund_month("2026-07", [("QA", "AAA", 10, "", 0, 0), ("QB", "AAA", 5, "", 0, 0)], [], [],
+                      [(f, "Own", "2026-06", 1000, None, None, None, None, None, 1e11) for f in ("QA", "QB")])
     g2, x2 = week_fusion(r, FakeFlows(), "2026-07-13", "2026-07-17")
     assert g2 == [("AAA", 12e9, 2, g2[0][3])] and x2 == [], (g2, x2)
     llm3 = FakeLlm()

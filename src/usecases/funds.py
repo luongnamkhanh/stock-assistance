@@ -5,15 +5,15 @@ from src.infrastructure import fmarket_api
 
 
 def pull_holdings(repo, month):
-    """Keo chi tiet moi quy co phieu (top 10 khoan + phan bo + NAV), luu tron goi 4 bang."""
+    """Keo chi tiet moi quy co phieu (top 10 khoan + phan bo + NAV + AUM), luu tron goi 4 bang."""
     holdings, assets, industries, snaps = [], [], [], []
     funds = fmarket_api.stock_funds()
-    for fid, name, owner in funds:
-        d = fmarket_api.fund_detail(fid)
+    for _, name, owner in funds:
+        d = fmarket_api.fund_detail(name)
         holdings += [(name, *h) for h in d["holdings"]]
         assets += [(name, *a) for a in d["assets"]]
         industries += [(name, *i) for i in d["industries"]]
-        snaps.append((name, owner, d["report_month"], d["nav"], *d["nav_chg"]))
+        snaps.append((name, owner, d["report_month"], d["nav"], *d["nav_chg"], d["aum"]))
     repo.save_fund_month(month, holdings, assets, industries, snaps)
     return len(funds), len(holdings)
 

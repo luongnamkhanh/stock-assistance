@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS fund_holdings (  -- top 10 khoan/quy tu Fmarket, chup
     symbol TEXT NOT NULL,
     pct REAL,               -- % NAV
     industry TEXT,
+    volume REAL,            -- so cp quy dang nam
+    value REAL,             -- gia tri khoan (VND)
     PRIMARY KEY (month, fund, symbol)
 );
 CREATE TABLE IF NOT EXISTS fund_assets (     -- phan bo tai san cua quy (Co phieu/Tien/...)
@@ -52,6 +54,7 @@ CREATE TABLE IF NOT EXISTS fund_snapshot (   -- 1 dong/quy/thang: NAV + hieu sua
     report_month TEXT,     -- thang bao cao danh muc thuc te (thuong som hon month 1 thang)
     nav REAL,              -- gia 1 ccq
     nav_1m REAL, nav_3m REAL, nav_6m REAL, nav_12m REAL, nav_36m REAL,  -- % thay doi NAV
+    aum REAL,              -- tong tai san quy (VND, fundReport.totalAssetValue)
     PRIMARY KEY (month, fund)
 );
 """
@@ -64,10 +67,14 @@ class SqliteRepo(SnapshotRepo):
         else:
             self.db = sqlite3.connect(str(path_or_conn) if isinstance(path_or_conn, Path) else path_or_conn)
         self.db.executescript(SCHEMA)
-        try:
-            self.db.execute("ALTER TABLE snapshots ADD COLUMN pct REAL")  # migrate pre-pct DBs
-        except sqlite3.OperationalError:
-            pass
+        for stmt in ("ALTER TABLE snapshots ADD COLUMN pct REAL",          # migrate DB cu
+                     "ALTER TABLE fund_holdings ADD COLUMN volume REAL",
+                     "ALTER TABLE fund_holdings ADD COLUMN value REAL",
+                     "ALTER TABLE fund_snapshot ADD COLUMN aum REAL"):
+            try:
+                self.db.execute(stmt)
+            except sqlite3.OperationalError:
+                pass
 
     def insert_snapshots(self, ts, rows):
         self.db.executemany("INSERT OR REPLACE INTO snapshots VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -215,17 +222,17 @@ class SqliteRepo(SnapshotRepo):
 
     def save_fund_month(self, month, holdings, assets, industries, snapshots):
         """Thay tron du lieu quy cua 1 thang (1 transaction — loi giua chung khong ghi gi).
-        holdings [(fund,sym,pct,industry)], assets [(fund,asset,pct)],
-        industries [(fund,industry,pct)], snapshots [(fund,owner,report_month,nav,n1,n3,n6,n12,n36)]."""
+        holdings [(fund,sym,pct,industry,volume,value)], assets [(fund,asset,pct)],
+        industries [(fund,industry,pct)], snapshots [(fund,owner,report_month,nav,n1..n36,aum)]."""
         for t in ("fund_holdings", "fund_assets", "fund_industries", "fund_snapshot"):
             self.db.execute(f"DELETE FROM {t} WHERE month=?", (month,))
-        self.db.executemany("INSERT OR REPLACE INTO fund_holdings VALUES (?,?,?,?,?)",
+        self.db.executemany("INSERT OR REPLACE INTO fund_holdings VALUES (?,?,?,?,?,?,?)",
                             [(month, *r) for r in holdings])
         self.db.executemany("INSERT OR REPLACE INTO fund_assets VALUES (?,?,?,?)",
                             [(month, *r) for r in assets])
         self.db.executemany("INSERT OR REPLACE INTO fund_industries VALUES (?,?,?,?)",
                             [(month, *r) for r in industries])
-        self.db.executemany("INSERT OR REPLACE INTO fund_snapshot VALUES (?,?,?,?,?,?,?,?,?,?)",
+        self.db.executemany("INSERT OR REPLACE INTO fund_snapshot VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                             [(month, *r) for r in snapshots])
         self.db.commit()
 
@@ -236,8 +243,9 @@ class SqliteRepo(SnapshotRepo):
         return r if r and r[0] else None
 
     def has_fund_month(self, month):
-        """Thang do da chup DAY DU chua (fund_snapshot la bang chi co o ban pull moi)."""
-        return self.db.execute("SELECT 1 FROM fund_snapshot WHERE month=? LIMIT 1",
+        """Thang do da chup DAY DU (co aum) chua — dieu kien `aum IS NOT NULL` de ban pull cu
+        (truoc khi co aum/volume/value) tu dong duoc chup bu."""
+        return self.db.execute("SELECT 1 FROM fund_snapshot WHERE month=? AND aum IS NOT NULL LIMIT 1",
                                (month,)).fetchone() is not None
 
     def fund_months(self):
@@ -251,7 +259,7 @@ class SqliteRepo(SnapshotRepo):
 
     def funds_holding(self, symbol, month):
         return self.db.execute(
-            "SELECT fund, pct FROM fund_holdings WHERE month=? AND symbol=? ORDER BY pct DESC",
+            "SELECT fund, pct, value FROM fund_holdings WHERE month=? AND symbol=? ORDER BY pct DESC",
             (month, symbol)).fetchall()
 
     def get_meta(self, k, default=None):

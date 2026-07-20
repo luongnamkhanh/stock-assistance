@@ -178,7 +178,7 @@ def fund_line(n, delta, avg=None, sym=None):
 
 
 def fund_stock_text(sym, month, rows, prev_n=None, report_month=None):
-    """rows: [(fund, pct)] cac quy dang co sym trong top 10 danh muc.
+    """rows: [(fund, pct, value)] cac quy dang co sym trong top 10 danh muc.
     prev_n: so quy thang truoc (None = chua co); report_month: (min, max) ky bao cao."""
     if not rows:
         return (f"Không quỹ mở nào (trên Fmarket) có {sym} trong top 10 danh mục tháng {month}.\n"
@@ -187,8 +187,12 @@ def fund_stock_text(sym, month, rows, prev_n=None, report_month=None):
     if prev_n is not None and len(rows) != prev_n:
         d = len(rows) - prev_n
         head += f" ({'▲' if d > 0 else '▼'}{abs(d)} so với tháng trước)"
-    avg = sum(p for _, p in rows) / len(rows)
-    lines = "\n".join(f"• {f}: {p:.1f}% NAV" for f, p in rows)
+    total = sum(v or 0 for _, _, v in rows)
+    if total:
+        head += f"\nTổng tiền các quỹ đang đặt: {total / 1e9:,.0f} tỷ"
+    avg = sum(p for _, p, _ in rows) / len(rows)
+    lines = "\n".join(f"• {f}: {p:.1f}% NAV" + (f" · {v / 1e9:,.0f} tỷ" if v else "")
+                      for f, p, v in rows)
     src = "(Nguồn: Fmarket, mỗi quỹ chỉ công bố top 10 khoản"
     if report_month:
         lo, hi = report_month

@@ -267,7 +267,8 @@ function render() {
       r.append(el("div", "sym", h.fund));
       const w = el("div", "barwrap"), bar = el("div", "bar");
       bar.style.width = ((h.pct||0) / pk * 100 * 0.75) + "%";
-      w.append(bar, el("span", "bval", fmt(h.pct) + "% NAV"));
+      w.append(bar, el("span", "bval", fmt(h.pct) + "% NAV"
+        + (h.value ? " · " + fmt(h.value / 1e9, 0) + " tỷ" : "")));
       r.append(w, el("div", "delta", ""));
       rows2.append(r);
     }
