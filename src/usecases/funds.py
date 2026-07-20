@@ -69,15 +69,17 @@ def maybe_pull_funds(repo, tg):
     now = now_vn()
     month, today = now.strftime("%Y-%m"), now.date().isoformat()
     if (now.day < 15
-            or repo.has_fund_month(month) or repo.get_meta("fund_try") == today):
-        return
-    repo.set_meta("fund_try", today)
+            or repo.has_fund_month(month) or repo.get_meta("fund_fail") == today):
+        return  # fund_fail: chi set khi that bai -> retry 1 lan/ngay, khong chan backfill sau nang cap
     try:
         n_funds, n_rows = pull_holdings(repo, month)
+        if not repo.has_fund_month(month):  # pull xong van thieu aum (API doi?) -> dung hammer moi 25s
+            repo.set_meta("fund_fail", today)
         print(f"[{now.isoformat(timespec='seconds')}] fund holdings {month}: {n_funds} quy, {n_rows} dong")
         data = fund_data(repo)
         if data and tg.cfg.get("chat_ids"):  # chi gui kenh duyet — bro tu forward neu ung
             tg.send_photo(tg.cfg["chat_ids"][0], chart.fund_png(data),
                           f"🏦 Quỹ mở đồng thuận tháng {month[5:]}/{month[:4]}")
     except Exception as e:
+        repo.set_meta("fund_fail", today)
         print(f"[{now.isoformat(timespec='seconds')}] fund pull failed: {e}")
