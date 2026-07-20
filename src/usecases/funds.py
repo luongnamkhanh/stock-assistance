@@ -1,6 +1,6 @@
 """Dong thuan quy mo (Fmarket): chup danh muc 1 lan/thang + tong hop cho /fund va anh."""
 from src.adapters import chart, presenters
-from src.config import in_trading_hours, now_vn
+from src.config import now_vn
 from src.infrastructure import fmarket_api
 
 
@@ -64,10 +64,11 @@ def fund_stock_message(sym, repo):
 
 def maybe_pull_funds(repo, tg):
     """Goi moi vong lap main. Chup danh muc 1 lan/thang: tu ngay 15 (quy da cap nhat bao cao),
-    ngoai gio giao dich, toi da 1 lan thu/ngay. Xong gui anh vao kenh duyet (chat_ids[0])."""
+    toi da 1 lan thu/ngay. Chay duoc ca trong gio GD — 34 call x timeout 10s, block toi da
+    vai phut 1 lan/thang, doi lai data co ngay khong phai doi het phien."""
     now = now_vn()
     month, today = now.strftime("%Y-%m"), now.date().isoformat()
-    if (now.day < 15 or in_trading_hours(now)
+    if (now.day < 15
             or repo.has_fund_month(month) or repo.get_meta("fund_try") == today):
         return
     repo.set_meta("fund_try", today)

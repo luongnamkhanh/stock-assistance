@@ -13,12 +13,13 @@ _FILTER = {"types": ["NEW_FUND", "TRADING_FUND"], "issuerIds": [], "sortOrder": 
 
 def stock_funds():
     """[(id, shortName, ten_cty_quan_ly)] cac quy co phieu dang giao dich tren Fmarket."""
-    rows = http_json(f"{API}/res/products/filter", timeout=30, body=_FILTER)["data"]["rows"]
+    rows = http_json(f"{API}/res/products/filter", timeout=10, body=_FILTER)["data"]["rows"]
     return [(r["id"], r["shortName"], (r.get("owner") or {}).get("name") or "") for r in rows]
 
 
 def fund_detail(short_name):
-    return _parse(http_json(f"{API}/home/product/{short_name}", timeout=30)["data"])
+    # timeout 10s: pull chay ca trong gio GD, gioi han worst-case block vong lap alert
+    return _parse(http_json(f"{API}/home/product/{short_name}", timeout=10)["data"])
 
 
 def _parse(d):
