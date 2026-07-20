@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS day_story (   -- dac tinh tung phien, chot luc tong k
     room_delta REAL, -- room NN cuoi - dau phien (cp)
     PRIMARY KEY (day, symbol)
 );
-CREATE TABLE IF NOT EXISTS watchlist (symbol TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS watchlist (  -- rieng tung chat: /watch cua ai nguoi do huong
+    chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, PRIMARY KEY (chat_id, symbol));
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS fund_holdings (  -- top 10 khoan/quy tu Fmarket, chup 1 lan/thang
     month TEXT NOT NULL,    -- 'YYYY-MM' thang chup
@@ -75,6 +76,13 @@ class SqliteRepo(SnapshotRepo):
                 self.db.execute(stmt)
             except sqlite3.OperationalError:
                 pass
+        # watchlist tu global (1 cot) -> per-chat: giu bang cu lam backup, tao bang moi rong
+        cols = [c[1] for c in self.db.execute("PRAGMA table_info(watchlist)")]
+        if cols and "chat_id" not in cols:
+            self.db.execute("ALTER TABLE watchlist RENAME TO watchlist_old")
+            self.db.execute("CREATE TABLE watchlist (chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, "
+                            "PRIMARY KEY (chat_id, symbol))")
+            self.db.commit()
 
     def insert_snapshots(self, ts, rows):
         self.db.executemany("INSERT OR REPLACE INTO snapshots VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -155,15 +163,20 @@ class SqliteRepo(SnapshotRepo):
         self.db.execute("INSERT OR REPLACE INTO state VALUES (?,?,?)", (symbol, regime, day))
         self.db.commit()
 
-    def watchlist(self):
-        return {r[0] for r in self.db.execute("SELECT symbol FROM watchlist")}
+    def watchlist(self, chat_id):
+        """Watchlist rieng cua 1 chat."""
+        return {r[0] for r in self.db.execute("SELECT symbol FROM watchlist WHERE chat_id=?", (chat_id,))}
 
-    def watch(self, symbol):
-        self.db.execute("INSERT OR IGNORE INTO watchlist VALUES (?)", (symbol,))
+    def watch_union(self):
+        """Hop watchlist moi chat — detector dung de biet ma nao can nguong thap."""
+        return {r[0] for r in self.db.execute("SELECT DISTINCT symbol FROM watchlist")}
+
+    def watch(self, chat_id, symbol):
+        self.db.execute("INSERT OR IGNORE INTO watchlist VALUES (?, ?)", (chat_id, symbol))
         self.db.commit()
 
-    def unwatch(self, symbol):
-        self.db.execute("DELETE FROM watchlist WHERE symbol=?", (symbol,))
+    def unwatch(self, chat_id, symbol):
+        self.db.execute("DELETE FROM watchlist WHERE chat_id=? AND symbol=?", (chat_id, symbol))
         self.db.commit()
 
     def save_day_story(self, day, late_from):

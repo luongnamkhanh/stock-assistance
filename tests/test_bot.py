@@ -20,10 +20,10 @@ def run():
     tg = FakeTg([upd(1, 7, "/watch hpg"), upd(2, 7, "/list"),
                  upd(3, 99, "/list"), upd(4, 99, "/id"), upd(5, 7, "/help")])
     handle_updates(r, tg, flows=None, llm=None, wait=0)
-    assert r.watchlist() == {"HPG"}
+    assert r.watchlist(7) == {"HPG"} and r.watchlist(99) == set()
     texts = [t for _, t in tg.sent]
     assert any("Đã theo dõi HPG" in t for t in texts)
-    assert any(t.startswith("Watchlist: HPG") for t in texts)
+    assert any(t.startswith("Watchlist của chat này: HPG") for t in texts)
     assert any("Chat id: 99" in t for t in texts)          # /id chay o chat la
     assert sum(c == 99 for c, _ in tg.sent) == 1           # chat la CHI duoc tra loi /id
     assert any("Lệnh của bot" in t for t in texts)

@@ -12,9 +12,9 @@ HELP_TEXT = """📖 Lệnh của bot:
 /dashboard — file dashboard đầy đủ metric quỹ (coverage, phân bổ, NAV) — mở bằng trình duyệt
 /brief MÃ — bản tin AI tổng hợp: dòng tiền + định giá + tin tức (~30 giây)
 /script — kịch bản video TikTok từ diễn biến khối ngoại hôm nay
-/watch MÃ — theo dõi mã (ngưỡng alert giảm một nửa)
+/watch MÃ — theo dõi mã: ngưỡng alert giảm một nửa, báo riêng chat này
 /unwatch MÃ — bỏ theo dõi
-/list — xem watchlist (list chung, ai trong group cũng sửa được)
+/list — xem watchlist của chat này (mỗi chat một danh sách riêng)
 /id — xem chat id (để cấp quyền cho group mới)
 /help — bảng này
 
@@ -30,7 +30,7 @@ Cuối mỗi phiên bot tự gửi tổng kết xu hướng khối ngoại toàn
 🔴 XẢ — bán ròng ≥ 15 tỷ, 30 phút gần nhất vẫn đang bán thêm
 🟠 XẢ CHỮNG LẠI — vẫn bán ròng ≥ 15 tỷ nhưng 30 phút gần nhất gần như ngừng bán (lực xả cạn dần)
 
-Mã trong watchlist: mọi ngưỡng trên giảm một nửa.
+Mã trong watchlist của chat: mọi ngưỡng trên giảm một nửa, và alert ngưỡng-thấp đó chỉ gửi riêng chat này.
 
 ⚠️ Thông tin tham khảo, không phải khuyến nghị đầu tư — quyết định là của bạn."""
 

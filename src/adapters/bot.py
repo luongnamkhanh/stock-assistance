@@ -35,14 +35,14 @@ def handle_updates(repo, tg, flows, llm, wait=25):
         if chat_id not in cfg["chat_ids"]:
             continue
         if cmd == "/WATCH" and arg:
-            repo.watch(arg)
-            tg.send_to(chat_id, f"✅ Đã theo dõi {arg} (ngưỡng alert giảm 1 nửa)")
+            repo.watch(chat_id, arg)
+            tg.send_to(chat_id, f"✅ Đã theo dõi {arg} (ngưỡng alert giảm 1 nửa — báo riêng chat này)")
         elif cmd == "/UNWATCH" and arg:
-            repo.unwatch(arg)
+            repo.unwatch(chat_id, arg)
             tg.send_to(chat_id, f"Đã bỏ theo dõi {arg}")
         elif cmd == "/LIST":
-            wl = sorted(repo.watchlist())
-            tg.send_to(chat_id, "Watchlist: " + (", ".join(wl) if wl else "(trống)"))
+            wl = sorted(repo.watchlist(chat_id))
+            tg.send_to(chat_id, "Watchlist của chat này: " + (", ".join(wl) if wl else "(trống)"))
         elif cmd == "/TREND":
             try:
                 if arg:

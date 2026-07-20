@@ -41,13 +41,16 @@ class SnapshotRepo(ABC):
     def set_regime(self, symbol, regime, day): ...
 
     @abstractmethod
-    def watchlist(self): ...                           # -> set[str]
+    def watchlist(self, chat_id): ...                  # -> set[str] rieng cua chat
 
     @abstractmethod
-    def watch(self, symbol): ...
+    def watch_union(self): ...                         # -> set[str] hop moi chat (cho detector)
 
     @abstractmethod
-    def unwatch(self, symbol): ...
+    def watch(self, chat_id, symbol): ...
+
+    @abstractmethod
+    def unwatch(self, chat_id, symbol): ...
 
     @abstractmethod
     def save_day_story(self, day, late_from): ...      # net/late_net/room_delta tung ma (late_net tu moc late_from)

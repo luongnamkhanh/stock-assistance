@@ -25,9 +25,19 @@ def run():
     r.add_alerts([(f"{day}T10:00:00+07:00", "AAA", "BUY", 5e9, 0.2, 20000)])
     assert r.recent_alert("AAA", "BUY", f"{day}T10:30:00+07:00", 60)
     assert not r.recent_alert("AAA", "BUY", f"{day}T10:30:00+07:00", 10)
-    # watchlist
-    r.watch("HPG"); r.watch("HPG"); assert r.watchlist() == {"HPG"}
-    r.unwatch("HPG"); assert r.watchlist() == set()
+    # watchlist rieng tung chat
+    r.watch(7, "HPG"); r.watch(7, "HPG"); r.watch(8, "SSI")
+    assert r.watchlist(7) == {"HPG"} and r.watchlist(8) == {"SSI"}
+    assert r.watch_union() == {"HPG", "SSI"}
+    r.unwatch(7, "HPG"); assert r.watchlist(7) == set() and r.watch_union() == {"SSI"}
+    # migrate bang cu (global 1 cot): doi ten backup, bang moi rong
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE watchlist (symbol TEXT PRIMARY KEY)")
+    conn.execute("INSERT INTO watchlist VALUES ('HPG')")
+    rm = SqliteRepo(conn)
+    assert rm.watchlist(7) == set() and rm.watch_union() == set()
+    assert rm.db.execute("SELECT symbol FROM watchlist_old").fetchone() == ("HPG",)
     # top_net_full (top_movers): net + price + pct cho snapshot ts do
     snap(r, f"{day}T10:10:00+07:00", "AAA", 25.2e9, day_value=120e9)
     assert r.top_net_full(f"{day}T10:10:00+07:00", 1e9) == [("AAA", 25.2e9, 20000, 1.5)]

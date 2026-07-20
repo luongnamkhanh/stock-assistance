@@ -11,6 +11,7 @@ from src.usecases.poll_market import poll
 
 
 def detect_spikes(repo, flows, ts, wl):
+    """-> [(sym, msg, wl_only)] — wl_only: chi qua nguong nho watchlist, giao rieng chat dang watch."""
     prev_ts = repo.prev_snapshot_ts(ts, WINDOW_MINUTES)
     if not prev_ts:
         return []
@@ -23,9 +24,11 @@ def detect_spikes(repo, flows, ts, wl):
         direction = "BUY" if net > 0 else "SELL"
         if repo.recent_alert(sym, direction, ts, COOLDOWN_MINUTES):
             continue
+        wl_only = f != 1.0 and signals.spike_share(
+            net, win_value, day_value, 1.0, MIN_DAY_VALUE, ALERT_MIN_NET, ALERT_MIN_SHARE) is None
         alerts.append((ts, sym, direction, net, share, price))
-        msgs.append(presenters.spike_msg(Spike(sym, net, share, price, pct or 0, day_net))
-                    + trend_ctx(sym, repo, flows))
+        msgs.append((sym, presenters.spike_msg(Spike(sym, net, share, price, pct or 0, day_net))
+                     + trend_ctx(sym, repo, flows), wl_only))
     repo.add_alerts(alerts)
     return msgs
 
@@ -46,10 +49,11 @@ def detect_states(repo, flows, ts, wl):
         old = repo.get_regime(sym, day)
         if regime == old:
             continue
-        repo.set_regime(sym, regime, day)
-        if regime != "NEUTRAL":
-            msgs.append(presenters.state_msg(RegimeChange(sym, regime, recent, day_net, price or 0, pct or 0))
-                        + trend_ctx(sym, repo, flows))
+        repo.set_regime(sym, regime, day)  # state luu chung theo nguong wl — chat khong watch co the
+        if regime != "NEUTRAL":            # bo lo 1 transition nguong-thap (chap nhan, hiem)
+            wl_only = f != 1.0 and signals.classify_regime(day_net, recent, 1.0, DAY_NET_TH, RATE_TH) != regime
+            msgs.append((sym, presenters.state_msg(RegimeChange(sym, regime, recent, day_net, price or 0, pct or 0))
+                         + trend_ctx(sym, repo, flows), wl_only))
     return msgs
 
 
@@ -67,23 +71,28 @@ def detect_accel(repo, flows, ts, wl):
         direction = "ABUY" if d3 > 0 else "ASELL"
         if repo.recent_alert(sym, direction, ts, COOLDOWN_MINUTES):
             continue
+        wl_only = f != 1.0 and not signals.is_accel(
+            d1, d2, d3, win3, day_value, 1.0, MIN_DAY_VALUE, ACCEL_MIN_LAST, ACCEL_MIN_SHARE)
         alerts.append((ts, sym, direction, d3, 0, 0))
-        msgs.append(presenters.accel_msg(Accel(sym, (d1, d2, d3), day_net, price or 0, pct or 0))
-                    + trend_ctx(sym, repo, flows))
+        msgs.append((sym, presenters.accel_msg(Accel(sym, (d1, d2, d3), day_net, price or 0, pct or 0))
+                     + trend_ctx(sym, repo, flows), wl_only))
     repo.add_alerts(alerts)
     return msgs
 
 
 def run_once(repo, feed, flows, tg):
     ts, n = poll(repo, feed)
-    wl = repo.watchlist()
-    msgs = detect_spikes(repo, flows, ts, wl) + detect_accel(repo, flows, ts, wl) + detect_states(repo, flows, ts, wl)
-    print(f"[{ts}] snapshot {n} symbols, {len(msgs)} alerts")
-    if msgs:
-        text = presenters.alert_digest(ts, msgs)
-        print(text)
-        try:
-            tg.broadcast(text)
-        except Exception as e:
-            print(f"telegram send failed: {e}")
-    return msgs
+    wl = repo.watch_union()
+    alerts = detect_spikes(repo, flows, ts, wl) + detect_accel(repo, flows, ts, wl) + detect_states(repo, flows, ts, wl)
+    print(f"[{ts}] snapshot {n} symbols, {len(alerts)} alerts")
+    if alerts:
+        print(presenters.alert_digest(ts, [m for _, m, _ in alerts]))
+        for cid in tg.cfg.get("chat_ids", []):
+            # alert nguong-thap (wl_only) chi den chat dang watch ma do; alert nguong day den moi chat
+            mine = [m for s, m, wl_only in alerts if not wl_only or s in repo.watchlist(cid)]
+            if mine:
+                try:
+                    tg.send_to(cid, presenters.alert_digest(ts, mine))
+                except Exception as e:
+                    print(f"telegram send failed ({cid}): {e}")
+    return alerts

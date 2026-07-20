@@ -20,19 +20,31 @@ def run():
     snap(r, f"{day}T09:30:00+07:00", "AAA", 10e9)
     snap(r, f"{day}T10:00:00+07:00", "AAA", 20e9)
     msgs = detect_states(r, F, f"{day}T10:00:00+07:00", set())
-    assert len(msgs) == 1 and "GOM" in msgs[0] and "CHỮNG" not in msgs[0], msgs
-    assert "Cả phiên" in msgs[0] and "Giá 20,000" in msgs[0], msgs
+    assert len(msgs) == 1 and "GOM" in msgs[0][1] and "CHỮNG" not in msgs[0][1], msgs
+    assert "Cả phiên" in msgs[0][1] and "Giá 20,000" in msgs[0][1], msgs
+    assert msgs[0][0] == "AAA" and msgs[0][2] is False, "khong watch -> khong phai wl_only"
     snap(r, f"{day}T10:30:00+07:00", "AAA", 20.1e9)
     msgs = detect_states(r, F, f"{day}T10:30:00+07:00", set())
-    assert len(msgs) == 1 and "CHỮNG" in msgs[0], msgs
+    assert len(msgs) == 1 and "CHỮNG" in msgs[0][1], msgs
     snap(r, f"{day}T11:00:00+07:00", "AAA", 20.2e9)
     assert detect_states(r, F, f"{day}T11:00:00+07:00", set()) == []
 
     snap(r, f"{day}T10:10:00+07:00", "AAA", 25.2e9, dv=120e9)
     msgs = detect_spikes(r, F, f"{day}T10:10:00+07:00", set())
-    assert len(msgs) == 1 and "AAA" in msgs[0] and "mua ròng" in msgs[0], msgs
-    assert "thỏa thuận" not in msgs[0]
+    assert len(msgs) == 1 and "AAA" in msgs[0][1] and "mua ròng" in msgs[0][1], msgs
+    assert "thỏa thuận" not in msgs[0][1] and msgs[0][2] is False
     assert detect_spikes(r, F, f"{day}T10:10:00+07:00", set()) == [], "cooldown"
+
+    # wl_only: chi qua nguong NHO watchlist -> flag True; khong watch thi khong co alert nao
+    r6 = SqliteRepo(":memory:")
+    snap(r6, f"{day}T10:00:00+07:00", "WLS", 1e9, dv=38e9)
+    snap(r6, f"{day}T10:10:00+07:00", "WLS", 3e9, dv=40e9)   # net 2 ty: >=1.5 (wl) nhung <3 (day)
+    out = detect_spikes(r6, F, f"{day}T10:10:00+07:00", {"WLS"})
+    assert len(out) == 1 and out[0][0] == "WLS" and out[0][2] is True, out
+    r7 = SqliteRepo(":memory:")
+    snap(r7, f"{day}T10:00:00+07:00", "WLS", 1e9, dv=38e9)
+    snap(r7, f"{day}T10:10:00+07:00", "WLS", 3e9, dv=40e9)
+    assert detect_spikes(r7, F, f"{day}T10:10:00+07:00", set()) == []
 
     r2 = SqliteRepo(":memory:")
     dvs = {"10:00": 100e9, "10:05": 110e9, "10:10": 120e9, "10:15": 140e9}
@@ -42,8 +54,8 @@ def run():
         for sym, buy, dv in (("BBB", bbb, dvs[hhmm]), ("CCC", ccc, dvs[hhmm]), ("EEE", bbb, big[hhmm])):
             snap(r2, f"{day}T{hhmm}:00+07:00", sym, buy, dv=dv, pct=1.0)
     msgs = detect_accel(r2, F, f"{day}T10:15:00+07:00", set())
-    assert len(msgs) == 1 and "BBB" in msgs[0] and "TĂNG TỐC" in msgs[0], msgs
-    assert "1.2 → 2.7 → 5.0" in msgs[0] and "Cả phiên" in msgs[0], msgs
+    assert len(msgs) == 1 and "BBB" in msgs[0][1] and "TĂNG TỐC" in msgs[0][1], msgs
+    assert "1.2 → 2.7 → 5.0" in msgs[0][1] and "Cả phiên" in msgs[0][1] and msgs[0][2] is False, msgs
     assert detect_accel(r2, F, f"{day}T10:15:00+07:00", set()) == [], "cooldown accel"
 
     # nhip tim dau phien: 1 lan/ngay, chi trong cua so 09:15-10:00, can snapshot hom nay
