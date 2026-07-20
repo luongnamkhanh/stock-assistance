@@ -58,9 +58,10 @@ def run():
     assert fund_line(0, None) == "" and fund_line(0, 2) == ""
     assert "27 quỹ mở" in fund_line(27, None) and "tháng này" not in fund_line(27, None)
     assert "▲2" in fund_line(12, 2) and "▼1" in fund_line(12, -1) and "tháng này" not in fund_line(12, 0)
-    full = fund_line(15, 2, 5.24, "ACB")
-    assert "TB 5.2% NAV" in full and "/fund ACB để soi" in full, full
+    full = fund_line(15, 2, 5.24, "ACB", 320e9)
+    assert "TB 5.2% NAV" in full and "/fund ACB để soi" in full and "tổng 320 tỷ" in full, full
     assert "NAV" not in fund_line(15, None) and "/fund" not in fund_line(15, None)
+    assert "tổng" not in fund_line(15, None, 5.0, "ACB", 0), "thang cu chua co value -> khong hien tong"
 
     # scorecard
     sc = scorecard_text({"ABUY": {5: (1.23, 0.67, 12)}}, 30)

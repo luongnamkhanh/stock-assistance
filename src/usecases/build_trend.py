@@ -42,7 +42,8 @@ def fund_ctx(sym, repo):
         return ""
     prev = len(repo.funds_holding(sym, months[-2])) if len(months) > 1 else None
     avg = sum(p for _, p, *_ in rows) / len(rows)
-    return presenters.fund_line(len(rows), None if prev is None else len(rows) - prev, avg, sym)
+    total = sum(v or 0 for _, _, v in rows)
+    return presenters.fund_line(len(rows), None if prev is None else len(rows) - prev, avg, sym, total)
 
 
 def top_movers(repo, n=3):

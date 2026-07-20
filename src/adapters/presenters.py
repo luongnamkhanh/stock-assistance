@@ -165,16 +165,17 @@ def top_movers_text(rows):
     return out
 
 
-def fund_line(n, delta, avg=None, sym=None):
-    """1 dong hop luu cho alert//trend: so quy nam (do rong) + TB %NAV (do tin) + tro /fund."""
+def fund_line(n, delta, avg=None, sym=None, total=None):
+    """1 dong hop luu cho alert//trend: so quy (do rong) + tong tien (VND) + TB %NAV (do tin)."""
     if not n:
         return ""
     d = ""
     if delta:
         d = f" (▲{delta} tháng này)" if delta > 0 else f" (▼{-delta} tháng này)"
+    t = f" · tổng {total / 1e9:,.0f} tỷ" if total else ""
     a = f" · TB {avg:.1f}% NAV" if avg else ""
     hint = f" — /fund {sym} để soi" if sym else ""
-    return f"\n🏦 {n} quỹ mở đang nắm trong top 10 danh mục{d}{a}{hint}"
+    return f"\n🏦 {n} quỹ mở đang nắm trong top 10 danh mục{d}{t}{a}{hint}"
 
 
 def fund_stock_text(sym, month, rows, prev_n=None, report_month=None):
