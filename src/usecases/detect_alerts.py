@@ -1,5 +1,7 @@
 """Spike / accel / state detectors + run_once.
 Diem noi config<->domain duy nhat: f = WL_FACTOR neu sym in watchlist."""
+from datetime import datetime
+
 from src.adapters import presenters
 from src.config import (ACCEL_MIN_LAST, ACCEL_MIN_SHARE, ALERT_MIN_NET, ALERT_MIN_SHARE,
                         COOLDOWN_MINUTES, DAY_NET_TH, MIN_DAY_VALUE, RATE_TH, STALL_MINUTES,
@@ -38,6 +40,9 @@ def detect_states(repo, flows, ts, wl):
     prev_ts = repo.prev_snapshot_ts(ts, STALL_MINUTES)
     if not prev_ts:
         return []
+    gap = (datetime.fromisoformat(ts) - datetime.fromisoformat(prev_ts)).total_seconds() / 60
+    if gap > STALL_MINUTES * 2:
+        return []  # cua so dinh khoang trong du lieu (nghi trua/outage) -> 'chung lai' se la gia
     day = ts[:10]
     msgs = []
     for sym, day_net, recent, day_value, price, pct in repo.state_rows(ts, prev_ts):

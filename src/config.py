@@ -36,6 +36,8 @@ def in_trading_hours(dt):
     if dt.weekday() >= 5:
         return False
     hm = dt.hour * 60 + dt.minute
+    if 11 * 60 + 30 <= hm < 13 * 60:    # nghi trua HOSE: khong khop lenh -> poll chi de ra tin hieu gia
+        return False
     return 9 * 60 <= hm <= 15 * 60 + 5  # 09:00 -> 15:05 (het ATC + du phong)
 
 

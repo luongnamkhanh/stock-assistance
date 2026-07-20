@@ -8,6 +8,11 @@ def run():
     assert in_trading_hours(datetime(2026, 1, 5, 15, 5, tzinfo=VN_TZ))
     assert not in_trading_hours(datetime(2026, 1, 5, 15, 6, tzinfo=VN_TZ))
     assert not in_trading_hours(datetime(2026, 1, 10, 10, 0, tzinfo=VN_TZ))  # Saturday
+    # nghi trua HOSE 11:30-13:00
+    assert in_trading_hours(datetime(2026, 1, 5, 11, 29, tzinfo=VN_TZ))
+    assert not in_trading_hours(datetime(2026, 1, 5, 11, 30, tzinfo=VN_TZ))
+    assert not in_trading_hours(datetime(2026, 1, 5, 12, 59, tzinfo=VN_TZ))
+    assert in_trading_hours(datetime(2026, 1, 5, 13, 0, tzinfo=VN_TZ))
     # DB default phai o repo root (canh flows.db hien tai), khong nam trong src/
     assert DB.parent.name != "src", DB
     # load_config doc env var truoc file

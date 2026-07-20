@@ -29,6 +29,12 @@ def run():
     snap(r, f"{day}T11:00:00+07:00", "AAA", 20.2e9)
     assert detect_states(r, F, f"{day}T11:00:00+07:00", set()) == []
 
+    # cua so 30' de len khoang trong nghi trua -> khong danh gia (chong 'chung lai' gia luc 13:0x)
+    r8 = SqliteRepo(":memory:")
+    snap(r8, f"{day}T11:28:00+07:00", "GGG", 20e9)
+    snap(r8, f"{day}T13:05:00+07:00", "GGG", 20.1e9)
+    assert detect_states(r8, F, f"{day}T13:05:00+07:00", set()) == [], "gap nghi trua -> skip"
+
     snap(r, f"{day}T10:10:00+07:00", "AAA", 25.2e9, dv=120e9)
     msgs = detect_spikes(r, F, f"{day}T10:10:00+07:00", set())
     assert len(msgs) == 1 and "AAA" in msgs[0][1] and "mua ròng" in msgs[0][1], msgs
