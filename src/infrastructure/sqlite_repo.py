@@ -206,7 +206,7 @@ class SqliteRepo(SnapshotRepo):
 
     def last_story(self, symbol, before_day):
         return self.db.execute(
-            "SELECT net, late_net, room_delta FROM day_story "
+            "SELECT day, net, late_net, room_delta FROM day_story "
             "WHERE symbol=? AND day<? ORDER BY day DESC LIMIT 1",
             (symbol, before_day)).fetchone()
 

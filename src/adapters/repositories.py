@@ -56,7 +56,7 @@ class SnapshotRepo(ABC):
     def save_day_story(self, day, late_from): ...      # net/late_net/room_delta tung ma (late_net tu moc late_from)
 
     @abstractmethod
-    def last_story(self, symbol, before_day): ...      # -> (net, late_net, room_delta) | None
+    def last_story(self, symbol, before_day): ...      # -> (day, net, late_net, room_delta) | None
 
     @abstractmethod
     def week_net(self, d1, d2, min_net): ...           # -> [(sym, tong_net d1..d2)] DESC, |net|>min_net

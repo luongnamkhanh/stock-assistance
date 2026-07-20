@@ -31,9 +31,12 @@ def run():
     a = accel_msg(Accel("BBB", (1.2e9, 2.7e9, 5e9), 9.9e9, 20000, 1.0))
     assert "BBB" in a and "TĂNG TỐC" in a and "1.2 → 2.7 → 5.0" in a, a
 
-    assert "xả dồn 30' cuối" in story_line((-100e9, -45e9, 0))
-    assert story_line((5e9, 1e9, 0)) == ""
-    assert "room -1.2tr" in story_line((20e9, 1e9, -1_200_000))
+    s = story_line(("2026-01-16", -100e9, -45e9, 0))
+    assert "xả dồn 30' cuối" in s and "Phiên trước (16/01)" in s, s
+    assert story_line(("2026-01-16", 5e9, 1e9, 0)) == ""
+    s = story_line(("2026-01-16", 20e9, 1e9, -1_200_000))
+    assert "room ngoại giảm 1.2tr cp (gom thêm" in s, s
+    assert "nhả bớt" in story_line(("2026-01-16", 20e9, 1e9, 800_000))
 
     assert "Cả phiên: mua ròng 25.2 tỷ" in ctx_line(25.2e9, 20000, 1.5)
     # closes don vi VND (ohlc chuan hoa tai nguon); index van la diem

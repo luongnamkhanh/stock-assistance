@@ -75,14 +75,16 @@ def state_msg(rc):
 
 
 def story_line(row):
-    """(net, late_net, room_delta) cua phien gan nhat -> ghi chu neu dang noi."""
-    net, late, room_d = row
+    """(day, net, late_net, room_delta) cua phien gan nhat da chot -> ghi chu neu dang noi.
+    Nhan kem ngay — "hom qua" se sai vao thu 2/sau le."""
+    day, net, late, room_d = row
     bits = []
     if abs(net) >= STORY_MIN_NET and late * net > 0 and abs(late) >= STORY_LATE_SHARE * abs(net):
         bits.append(f"{'gom' if net > 0 else 'xả'} dồn 30' cuối ({late/1e9:+,.0f}/{net/1e9:+,.0f} tỷ)")
     if abs(room_d) >= STORY_ROOM_MIN:
-        bits.append(f"room {'+' if room_d > 0 else '-'}{abs(room_d)/1e6:.1f}tr cp")
-    return "\nHôm qua: " + " · ".join(bits) if bits else ""
+        bits.append(f"room ngoại {'giảm' if room_d < 0 else 'tăng'} {abs(room_d)/1e6:.1f}tr cp "
+                    f"({'gom thêm' if room_d < 0 else 'nhả bớt'} về khối lượng)")
+    return f"\nPhiên trước ({day[8:]}/{day[5:7]}): " + " · ".join(bits) if bits else ""
 
 
 def trend_ctx_line(flows):

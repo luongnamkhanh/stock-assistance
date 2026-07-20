@@ -47,7 +47,7 @@ def run():
     for hhmm, buy, room in (("09:30", 2e9, 100), ("14:00", 4e9, 90), ("14:30", 9e9, 80)):
         snap(r2, f"{day}T{hhmm}:00+07:00", "DDD", buy, day_value=50e9, room=room)
     r2.save_day_story(day, "14:15:00")
-    assert r2.last_story("DDD", "2026-01-06") == (9e9, 5e9, -20)
+    assert r2.last_story("DDD", "2026-01-06") == (day, 9e9, 5e9, -20)
     assert r2.last_story("DDD", day) is None                  # before_day nghiem ngat
     # meta
     assert r.get_meta("x") is None and r.get_meta("x", "0") == "0"
