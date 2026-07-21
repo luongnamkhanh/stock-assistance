@@ -70,6 +70,14 @@ def run():
     sc = scorecard_text({"ABUY": {5: (1.23, 0.67, 12)}}, 30)
     assert "Tăng tốc GOM" in sc and "+1.2%" in sc and "67%" in sc and "12 tín hiệu" in sc, sc
     assert "chưa có tín hiệu" in scorecard_text({}, 30)
+
+    # forcesell + margin
+    from src.adapters.presenters import forcesell_msg, margin_text
+    fs = forcesell_msg("2026-07-20T14:05:00+07:00", [("VIX", -6.9), ("SHB", -6.7)])
+    assert "2 mã" in fs and "VIX -6.9%" in fs and "giải chấp" in fs and "khuyến nghị" in fs, fs
+    mt = margin_text({"quarter": "Q2/2026", "market_total_ty": 445000,
+                      "brokers": [{"n": "TCBS", "debt": 44147}, {"n": "SSI", "debt": 36585, "equity": 30000}]})
+    assert "TCBS: 44,147 tỷ" in mt and "445,000" in mt and "Q2/2026" in mt and "122% VCSH" in mt, mt
     print("test_presenters OK")
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+{
+  "quarter": "Q2/2026",
+  "market_total_ty": 445000,
+  "brokers": [
+    {"n": "TCBS", "debt": 44147},
+    {"n": "SSI", "debt": 36585},
+    {"n": "VPBankS", "debt": 35919},
+    {"n": "VPS", "debt": 15000},
+    {"n": "HSC", "debt": 14000}
+  ]
+}

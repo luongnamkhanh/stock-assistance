@@ -10,6 +10,7 @@ HELP_TEXT = """📖 Lệnh của bot:
 /fund — mã nào đang được nhiều quỹ mở nắm nhất (Fmarket, cập nhật hàng tháng)
 /fund MÃ — quỹ mở nào đang có mã này trong top 10 danh mục
 /dashboard — file dashboard đầy đủ metric quỹ (coverage, phân bổ, NAV) — mở bằng trình duyệt
+/margin — dư nợ margin các công ty chứng khoán (theo quý, từ BCTC)
 /brief MÃ — bản tin AI tổng hợp: dòng tiền + định giá + tin tức (~30 giây)
 /script — kịch bản video TikTok từ diễn biến khối ngoại hôm nay
 /watch MÃ — theo dõi mã: ngưỡng alert giảm một nửa, báo riêng chat này
@@ -268,6 +269,26 @@ def open_msg(ts, net, ups, top_n, n_syms):
     side = "mua" if net >= 0 else "bán"
     return (f"🔔 Mở phiên {ts[8:10]}/{ts[5:7]} — lúc {ts[11:16]}: khối ngoại {side} ròng "
             f"{abs(net) / 1e9:,.0f} tỷ · nhóm GTGD lớn {ups}/{top_n} mã xanh · đang quét {n_syms} mã HOSE")
+
+
+def forcesell_msg(ts, floors):
+    """floors: [(sym, pct)] cac ma (gan) san, DESC theo GTGD."""
+    ex = ", ".join(f"{s} {p:.1f}%" for s, p in floors[:6])
+    return (f"🚨 {ts[11:16]} — {len(floors)} mã thanh khoản lớn đang giảm sàn/gần sàn\n"
+            f"{ex}{'...' if len(floors) > 6 else ''}\n"
+            "Dấu hiệu bán tháo / giải chấp diện rộng — thường rơi vào khung 10-11h và 14h.\n"
+            "Thông tin tham khảo, không phải khuyến nghị đầu tư.")
+
+
+def margin_text(d):
+    """d: dict tu margin.json — dư nợ margin CTCK theo quy (nhap tay tu BCTC)."""
+    lines = []
+    for i, b in enumerate(d["brokers"][:12], 1):
+        ratio = f" · {b['debt'] / b['equity'] * 100:.0f}% VCSH" if b.get("equity") else ""
+        lines.append(f"{i}. {b['n']}: {b['debt']:,.0f} tỷ{ratio}")
+    return (f"📊 Dư nợ margin CTCK — {d['quarter']} (nguồn: BCTC quý, cập nhật chậm)\n"
+            f"Toàn thị trường: ~{d['market_total_ty']:,.0f} tỷ\n" + "\n".join(lines)
+            + "\n(Trần quy định: dư nợ ≤ 200% VCSH. Thông tin tham khảo.)")
 
 
 def alert_digest(ts, msgs):

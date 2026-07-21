@@ -93,6 +93,33 @@ def run():
     snap(r5, "2026-01-05T09:14:00+07:00", "AAA", 9e9)
     maybe_send_open(r5, tg, now=at(10, 30))
     assert len(tg.sent) == 1, "qua 10:00 khong gui muon"
+
+    # forcesell: >= FORCESELL_MIN ma GTGD lon (gan) san -> canh bao broadcast 1 lan/ngay
+    from src.config import FORCESELL_MIN
+    from src.usecases.detect_alerts import maybe_forcesell
+
+    class FTg:
+        def __init__(self):
+            self.sent, self.cfg = [], {"token": "t", "chat_ids": [7]}
+        def send_to(self, cid, text, silent=False, reply_markup=None):
+            self.sent.append((cid, text))
+
+    fts = f"{day}T10:30:00+07:00"
+    r10 = SqliteRepo(":memory:")
+    for i in range(FORCESELL_MIN):
+        snap(r10, fts, f"F{i:02d}", 1e9, dv=50e9, pct=-6.8)   # gan san, GTGD lon
+    snap(r10, fts, "GRN", 1e9, dv=50e9, pct=1.0)              # xanh -> khong tinh
+    snap(r10, fts, "PNY", 1e9, dv=1e9, pct=-6.9)              # san nhung GTGD nho -> loai
+    tgf = FTg()
+    maybe_forcesell(r10, tgf, fts)
+    assert len(tgf.sent) == 1 and "giảm sàn" in tgf.sent[0][1] and str(FORCESELL_MIN) in tgf.sent[0][1], tgf.sent
+    maybe_forcesell(r10, tgf, fts)
+    assert len(tgf.sent) == 1, "1 lan/ngay"
+    r11 = SqliteRepo(":memory:")   # duoi nguong -> khong bao
+    snap(r11, fts, "F1", 1e9, dv=50e9, pct=-6.8)
+    tgf2 = FTg()
+    maybe_forcesell(r11, tgf2, fts)
+    assert tgf2.sent == []
     print("test_usecases OK")
 
 if __name__ == "__main__":

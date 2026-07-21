@@ -68,6 +68,9 @@ class SnapshotRepo(ABC):
     def snapshot_count(self, ts): ...                  # -> so ma trong snapshot ts
 
     @abstractmethod
+    def floor_stocks(self, ts, floor_pct, min_dv, n=100): ...  # -> [(sym, pct)] ma GTGD lon (gan) san
+
+    @abstractmethod
     def top_net_full(self, ts, min_net): ...           # -> [(sym, day_net, price, pct)] DESC, |net|>min_net
 
     @abstractmethod

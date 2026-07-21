@@ -225,6 +225,13 @@ class SqliteRepo(SnapshotRepo):
         """So ma trong snapshot ts (cho tin nhip tim dau phien)."""
         return self.db.execute("SELECT COUNT(*) FROM snapshots WHERE ts=?", (ts,)).fetchone()[0]
 
+    def floor_stocks(self, ts, floor_pct, min_dv, n=100):
+        """[(symbol, pct)] cac ma GTGD lon giam <= floor_pct tai ts, DESC theo GTGD (cho forcesell)."""
+        return self.db.execute(
+            "SELECT symbol, COALESCE(pct,0) FROM snapshots WHERE ts=? AND COALESCE(pct,0) <= ? "
+            "AND day_value >= ? ORDER BY day_value DESC LIMIT ?",
+            (ts, floor_pct, min_dv, n)).fetchall()
+
     def top_net_full(self, ts, min_net):
         return self.db.execute(
             "SELECT symbol, buy_val - sell_val AS dn, price, COALESCE(pct, 0) "

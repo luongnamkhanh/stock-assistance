@@ -8,6 +8,7 @@ from src.usecases.build_brief import build_brief
 from src.usecases.build_trend import market_snapshot, trend_message
 from src.usecases.funds import fund_data, fund_stock_message
 from src.usecases.make_script import make_script
+from src.usecases.margin import margin_message
 from src.usecases.notes import add_note, notes_message
 
 
@@ -102,6 +103,8 @@ def handle_updates(repo, tg, flows, llm, wait=25):
                     tg.send_to(chat_id, "Chưa có dữ liệu quỹ (bot chụp danh mục Fmarket từ ngày 15 hàng tháng).")
             except Exception as e:
                 tg.send_to(chat_id, f"Không tạo được dashboard ({e})")
+        elif cmd == "/MARGIN":
+            tg.send_to(chat_id, margin_message())
         elif cmd == "/CHART":
             try:
                 ctx = market_snapshot(repo, flows)
