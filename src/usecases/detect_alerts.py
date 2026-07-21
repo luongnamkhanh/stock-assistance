@@ -8,6 +8,7 @@ from src.config import (ACCEL_MIN_LAST, ACCEL_MIN_SHARE, ALERT_MIN_NET, ALERT_MI
                         MIN_DAY_VALUE, RATE_TH, STALL_MINUTES, WINDOW_MINUTES, WL_FACTOR)
 from src.domain import signals
 from src.domain.entities import Accel, RegimeChange, Spike
+from src.usecases import margin
 from src.usecases.build_trend import trend_ctx
 from src.usecases.funds import holders_of
 from src.usecases.poll_market import poll
@@ -107,7 +108,7 @@ def maybe_forcesell(repo, tg, ts):
     if len(floors) < FORCESELL_MIN:
         return
     repo.set_meta("forcesell_day", day)
-    text = presenters.forcesell_msg(ts, floors)
+    text = presenters.forcesell_msg(ts, floors, margin.market_tension())  # ghep boi canh margin quy
     for cid in tg.cfg.get("chat_ids", []):
         try:
             tg.send_to(cid, text)  # keu — tin hieu rui ro dien rong dang chu y

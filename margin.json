@@ -1,11 +1,14 @@
 {
-  "quarter": "Q2/2026",
-  "market_total_ty": 445000,
-  "brokers": [
-    {"n": "TCBS", "debt": 44147},
-    {"n": "SSI", "debt": 36585},
-    {"n": "VPBankS", "debt": 35919},
-    {"n": "VPS", "debt": 15000},
-    {"n": "HSC", "debt": 14000}
+  "quarters": [
+    {"quarter": "Q3/2025", "market_total_ty": 370000, "brokers": []},
+    {"quarter": "Q4/2025", "market_total_ty": 412600, "brokers": []},
+    {"quarter": "Q1/2026", "market_total_ty": 415000, "brokers": []},
+    {"quarter": "Q2/2026", "market_total_ty": 445000, "brokers": [
+      {"n": "TCBS", "debt": 44147},
+      {"n": "SSI", "debt": 36585},
+      {"n": "VPBankS", "debt": 35919},
+      {"n": "VPS", "debt": 15000},
+      {"n": "HSC", "debt": 14000}
+    ]}
   ]
 }

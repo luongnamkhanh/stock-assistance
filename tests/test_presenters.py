@@ -71,13 +71,26 @@ def run():
     assert "Tăng tốc GOM" in sc and "+1.2%" in sc and "67%" in sc and "12 tín hiệu" in sc, sc
     assert "chưa có tín hiệu" in scorecard_text({}, 30)
 
-    # forcesell + margin
-    from src.adapters.presenters import forcesell_msg, margin_text
+    # forcesell (+ tension optional)
+    from src.adapters.presenters import forcesell_msg, margin_text, margin_tension_line
     fs = forcesell_msg("2026-07-20T14:05:00+07:00", [("VIX", -6.9), ("SHB", -6.7)])
     assert "2 mã" in fs and "VIX -6.9%" in fs and "giải chấp" in fs and "khuyến nghị" in fs, fs
-    mt = margin_text({"quarter": "Q2/2026", "market_total_ty": 445000,
-                      "brokers": [{"n": "TCBS", "debt": 44147}, {"n": "SSI", "debt": 36585, "equity": 30000}]})
-    assert "TCBS: 44,147 tỷ" in mt and "445,000" in mt and "Q2/2026" in mt and "122% VCSH" in mt, mt
+    assert "Bối cảnh" not in fs, "khong tension -> khong dong boi canh"
+    fs2 = forcesell_msg("2026-07-20T14:05:00+07:00", [("VIX", -6.9)], "Bối cảnh: dư nợ ~445,000 tỷ")
+    assert "Bối cảnh: dư nợ" in fs2, fs2
+
+    # margin: Δ so quy truoc tu tinh + canh bao tang nong (+10%)
+    q2 = {"quarter": "Q2/2026", "market_total_ty": 445000,
+          "brokers": [{"n": "TCBS", "debt": 44147}, {"n": "SSI", "debt": 36585, "equity": 30000}]}
+    q1 = {"quarter": "Q1/2026", "market_total_ty": 415000, "brokers": []}
+    mt = margin_text(q2, q1)
+    assert "TCBS: 44,147 tỷ" in mt and "445,000" in mt and "122% VCSH" in mt, mt
+    assert "▲30,000 tỷ (+7% so Q1/2026)" in mt and "tăng nóng" not in mt, mt   # +7% chua nong
+    hot = {"quarter": "Q3/2025", "market_total_ty": 370000, "brokers": []}
+    q4 = {"quarter": "Q4/2025", "market_total_ty": 412600, "brokers": []}
+    assert "tăng nóng" in margin_text(q4, hot), "q4 vs q3 +11% -> nong"
+    assert margin_text(q2, None).count("so ") == 0, "khong co quy truoc -> khong Δ"
+    assert "445,000 tỷ" in margin_tension_line(q2, q1)
     print("test_presenters OK")
 
 if __name__ == "__main__":

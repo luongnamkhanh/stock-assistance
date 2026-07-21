@@ -271,24 +271,45 @@ def open_msg(ts, net, ups, top_n, n_syms):
             f"{abs(net) / 1e9:,.0f} tỷ · nhóm GTGD lớn {ups}/{top_n} mã xanh · đang quét {n_syms} mã HOSE")
 
 
-def forcesell_msg(ts, floors):
-    """floors: [(sym, pct)] cac ma (gan) san, DESC theo GTGD."""
+def forcesell_msg(ts, floors, tension=None):
+    """floors: [(sym, pct)] cac ma (gan) san, DESC theo GTGD; tension: dong boi canh margin (optional)."""
     ex = ", ".join(f"{s} {p:.1f}%" for s, p in floors[:6])
-    return (f"🚨 {ts[11:16]} — {len(floors)} mã thanh khoản lớn đang giảm sàn/gần sàn\n"
+    body = (f"🚨 {ts[11:16]} — {len(floors)} mã thanh khoản lớn đang giảm sàn/gần sàn\n"
             f"{ex}{'...' if len(floors) > 6 else ''}\n"
-            "Dấu hiệu bán tháo / giải chấp diện rộng — thường rơi vào khung 10-11h và 14h.\n"
-            "Thông tin tham khảo, không phải khuyến nghị đầu tư.")
+            "Dấu hiệu bán tháo / giải chấp diện rộng — thường rơi vào khung 10-11h và 14h.")
+    if tension:
+        body += f"\n{tension}"
+    return body + "\nThông tin tham khảo, không phải khuyến nghị đầu tư."
 
 
-def margin_text(d):
-    """d: dict tu margin.json — dư nợ margin CTCK theo quy (nhap tay tu BCTC)."""
+def _margin_delta(latest, prev):
+    """(chuoi mo ta Δ so quy truoc, co_tang_nong) — dung chung /margin va tension line."""
+    if not prev:
+        return "", False
+    d = latest["market_total_ty"] - prev["market_total_ty"]
+    pct = d / prev["market_total_ty"] * 100 if prev["market_total_ty"] else 0
+    return f"{'▲' if d >= 0 else '▼'}{abs(d):,.0f} tỷ ({pct:+.0f}% so {prev['quarter']})", d > 0 and pct >= 10
+
+
+def margin_text(latest, prev):
+    """latest/prev: 2 quy gan nhat tu margin.json — Δ tu tinh, khong nhap tay."""
+    delta, hot = _margin_delta(latest, prev)
     lines = []
-    for i, b in enumerate(d["brokers"][:12], 1):
+    for i, b in enumerate(latest.get("brokers") or [], 1):
         ratio = f" · {b['debt'] / b['equity'] * 100:.0f}% VCSH" if b.get("equity") else ""
         lines.append(f"{i}. {b['n']}: {b['debt']:,.0f} tỷ{ratio}")
-    return (f"📊 Dư nợ margin CTCK — {d['quarter']} (nguồn: BCTC quý, cập nhật chậm)\n"
-            f"Toàn thị trường: ~{d['market_total_ty']:,.0f} tỷ\n" + "\n".join(lines)
-            + "\n(Trần quy định: dư nợ ≤ 200% VCSH. Thông tin tham khảo.)")
+    head = (f"📊 Dư nợ margin CTCK — {latest['quarter']} (nguồn: BCTC quý)\n"
+            f"Toàn thị trường: ~{latest['market_total_ty']:,.0f} tỷ" + (f" · {delta}" if delta else ""))
+    if hot:
+        head += "\n⚠️ Đòn bẩy toàn thị trường đang tăng nóng — vùng rủi ro cao khi thị trường giảm."
+    body = ("\n" + "\n".join(lines)) if lines else ""
+    return head + body + "\n(Trần quy định: dư nợ ≤ 200% VCSH. Thông tin tham khảo.)"
+
+
+def margin_tension_line(latest, prev):
+    delta, hot = _margin_delta(latest, prev)
+    warn = " — đòn bẩy đang tăng nóng" if hot else ""
+    return f"Bối cảnh: dư nợ margin toàn ngành {latest['quarter']} ~{latest['market_total_ty']:,.0f} tỷ{warn}"
 
 
 def alert_digest(ts, msgs):
