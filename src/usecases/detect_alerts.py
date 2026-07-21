@@ -111,8 +111,10 @@ def run_once(repo, feed, flows, tg):
             if not mine:
                 continue
             keu = any(loud or s in watch for s, _, loud in mine)
+            buttons = presenters.note_buttons([s for s, _, _ in mine])  # nut 📌 de note 1 cham
             try:
-                tg.send_to(cid, presenters.alert_digest(ts, [m for _, m, _ in mine]), silent=not keu)
+                tg.send_to(cid, presenters.alert_digest(ts, [m for _, m, _ in mine]),
+                           silent=not keu, reply_markup=buttons)
             except Exception as e:
                 print(f"telegram send failed ({cid}): {e}")
     return alerts

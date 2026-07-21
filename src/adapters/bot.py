@@ -8,6 +8,19 @@ from src.usecases.build_brief import build_brief
 from src.usecases.build_trend import market_snapshot, trend_message
 from src.usecases.funds import fund_data, fund_stock_message
 from src.usecases.make_script import make_script
+from src.usecases.notes import add_note, notes_message
+
+
+def _handle_callback(repo, tg, cq, chat_ids):
+    """Cu bam nut inline duoi alert (📌 MA) -> note 1 cham."""
+    data = cq.get("data", "")
+    chat_id = cq.get("message", {}).get("chat", {}).get("id")
+    if chat_id in chat_ids and data.startswith("n:"):
+        sym = data[2:]
+        add_note(repo, chat_id, sym)
+        tg.answer_callback(cq["id"], f"📌 Đã lưu {sym} — xem lại: /notes")
+    else:
+        tg.answer_callback(cq["id"])
 
 
 def handle_updates(repo, tg, flows, llm, wait=25):
@@ -21,6 +34,9 @@ def handle_updates(repo, tg, flows, llm, wait=25):
     updates = tg.get_updates(offset, wait)
     for u in updates:
         offset = u["update_id"]
+        if "callback_query" in u:
+            _handle_callback(repo, tg, u["callback_query"], cfg["chat_ids"])
+            continue
         m = u.get("message", {})
         chat_id = m.get("chat", {}).get("id")
         parts = (m.get("text") or "").strip().upper().split()
@@ -43,6 +59,11 @@ def handle_updates(repo, tg, flows, llm, wait=25):
         elif cmd == "/LIST":
             wl = sorted(repo.watchlist(chat_id))
             tg.send_to(chat_id, "Watchlist của chat này: " + (", ".join(wl) if wl else "(trống)"))
+        elif cmd == "/NOTES":
+            tg.send_to(chat_id, notes_message(repo, chat_id))
+        elif cmd == "/UNNOTE" and arg:
+            repo.unnote(chat_id, arg.upper())
+            tg.send_to(chat_id, f"Đã xóa ghi chú {arg.upper()}.")
         elif cmd == "/TREND":
             try:
                 if arg:

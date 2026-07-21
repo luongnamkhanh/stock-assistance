@@ -15,6 +15,8 @@ HELP_TEXT = """📖 Lệnh của bot:
 /watch MÃ — theo dõi mã: ngưỡng alert giảm một nửa, báo riêng chat này
 /unwatch MÃ — bỏ theo dõi
 /list — xem watchlist của chat này (mỗi chat một danh sách riêng)
+/notes — xem các mã đã ghi chú + % giá từ lúc note (bấm nút 📌 dưới mỗi cảnh báo để lưu)
+/unnote MÃ — bỏ ghi chú một mã
 /id — xem chat id (để cấp quyền cho group mới)
 /help — bảng này
 
@@ -218,6 +220,43 @@ def scorecard_text(stats, days):
             lines.append(f"• {DIRECTION_LABEL.get(d, d)} — sau {h} phiên: TB {avg:+.1f}%, win {wr:.0%} ({n} tín hiệu)")
     lines.append("Thông tin tham khảo — không phải khuyến nghị đầu tư.")
     return "\n".join(lines)
+
+
+def note_buttons(syms):
+    """Nut inline '📌 MA' cho tung ma trong alert -> bam 1 cham de note. None neu rong."""
+    seen = list(dict.fromkeys(syms))[:6]  # dedup giu thu tu, cap 6 nut
+    if not seen:
+        return None
+    btns = [{"text": f"📌 {s}", "callback_data": f"n:{s}"} for s in seen]
+    return {"inline_keyboard": [btns[i:i + 3] for i in range(0, len(btns), 3)]}
+
+
+def note_added_msg(sym, price, days):
+    p = f" (giá {price:,.0f})" if price else ""
+    return (f"📌 Đã ghi chú {sym}{p}. Xem lại bất cứ lúc nào: /notes\n"
+            f"Bot sẽ tự báo kết quả sau ~{days} phiên. Thông tin tham khảo, không phải khuyến nghị.")
+
+
+def notes_list_text(rows):
+    """rows: [(sym, ts, price_luc_note, gia_hien_tai)]."""
+    if not rows:
+        return "Bạn chưa ghi chú mã nào. Thấy tín hiệu muốn theo dõi thì gõ /note MÃ."
+    lines = []
+    for sym, ts, p0, cur in rows:
+        chg = f"{(cur / p0 - 1) * 100:+.1f}%" if p0 and cur else "—"
+        lines.append(f"• {sym} (từ {ts[8:10]}/{ts[5:7]}): {chg}")
+    return ("📌 Ghi chú của bạn — % giá từ lúc note đến hiện tại:\n" + "\n".join(lines)
+            + "\n(/unnote MÃ để xóa · thông tin tham khảo)")
+
+
+def note_report_text(items):
+    """items: [(sym, ts, pct|None)] — bot tu bao sau vai phien."""
+    lines = []
+    for sym, ts, pct in items:
+        chg = f"{pct:+.1f}%" if pct is not None else "(không có giá)"
+        lines.append(f"• {sym} (ghi chú {ts[8:10]}/{ts[5:7]}): {chg}")
+    return ("🔔 Cập nhật mã bạn đã ghi chú:\n" + "\n".join(lines)
+            + "\nThông tin tham khảo, không phải khuyến nghị đầu tư.")
 
 
 def script_msg(text):

@@ -13,13 +13,23 @@ class TelegramBot(Telegram):
         """Initialize with config dict containing 'token' and 'chat_ids'."""
         self.cfg = cfg
 
-    def send_to(self, chat_id, text, silent=False):
+    def send_to(self, chat_id, text, silent=False, reply_markup=None):
         """Send text message to a single chat_id (cap 4000 — Telegram limit 4096).
-        silent=True: gui khong am thanh/rung (disable_notification) — tin van den day du, chi khong keu."""
+        silent=True: gui khong am thanh/rung (disable_notification) — tin van den day du, chi khong keu.
+        reply_markup: inline keyboard (dict) — nut bam duoi tin (vd nut 'Luu' cho note)."""
+        body = {"chat_id": chat_id, "text": text[:4000], "disable_notification": silent}
+        if reply_markup:
+            body["reply_markup"] = reply_markup
         req = urllib.request.Request(
             f"https://api.telegram.org/bot{self.cfg['token']}/sendMessage",
-            data=json.dumps({"chat_id": chat_id, "text": text[:4000],
-                             "disable_notification": silent}).encode(),
+            data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=15)
+
+    def answer_callback(self, callback_id, text=""):
+        """Tra loi 1 cu bam nut inline — tat trang thai loading + hien toast ngan."""
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{self.cfg['token']}/answerCallbackQuery",
+            data=json.dumps({"callback_query_id": callback_id, "text": text}).encode(),
             headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=15)
 

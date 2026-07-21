@@ -24,6 +24,7 @@ STORY_MIN_NET = 10e9       # story_line: |net ca phien| >= 10 ty moi dang noi
 STORY_LATE_SHARE = 0.4     # story_line: 30' cuoi chiem >= 40% net ca phien -> "don cuoi phien"
 STORY_ROOM_MIN = 500_000   # story_line: |room delta| >= 0.5tr cp moi nhac  # ponytail: nguong tho, chinh khi thay keu nhieu/it qua
 FUND_CONFLUENCE_MIN = 10    # alert kem chuong: gom + >= 10 quy mo dang nam -> tin hieu hop luu (loud)
+NOTE_REVIEW_DAYS = 5        # note: bao lai ket qua sau ~5 phien
 DB = Path(os.environ.get("DB_PATH", str(ROOT / "flows.db")))
 CONFIG = ROOT / "telegram.json"  # {"token": ..., "chat_id": ...} — keep private
 VN_TZ = timezone(timedelta(hours=7))

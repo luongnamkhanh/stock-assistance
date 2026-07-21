@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS day_story (   -- dac tinh tung phien, chot luc tong k
 );
 CREATE TABLE IF NOT EXISTS watchlist (  -- rieng tung chat: /watch cua ai nguoi do huong
     chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, PRIMARY KEY (chat_id, symbol));
+CREATE TABLE IF NOT EXISTS notes (      -- user note 1 tin hieu de theo doi + bot bao lai sau vai phien
+    chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, ts TEXT NOT NULL,  -- ts luc note (ISO)
+    price REAL,             -- gia luc note (snapshot moi nhat)
+    reported INTEGER DEFAULT 0,  -- da bao lai ket qua chua
+    PRIMARY KEY (chat_id, symbol, ts)
+);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS fund_holdings (  -- top 10 khoan/quy tu Fmarket, chup 1 lan/thang
     month TEXT NOT NULL,    -- 'YYYY-MM' thang chup
@@ -274,6 +280,36 @@ class SqliteRepo(SnapshotRepo):
         return self.db.execute(
             "SELECT fund, pct, value FROM fund_holdings WHERE month=? AND symbol=? ORDER BY pct DESC",
             (month, symbol)).fetchall()
+
+    def last_price(self, symbol):
+        """Gia khop gan nhat cua 1 ma trong snapshots (None neu chua co)."""  # ponytail: scan theo symbol, du cho /note thua thot
+        r = self.db.execute("SELECT price FROM snapshots WHERE symbol=? ORDER BY ts DESC LIMIT 1",
+                            (symbol,)).fetchone()
+        return r[0] if r else None
+
+    def add_note(self, chat_id, symbol, ts, price):
+        self.db.execute("INSERT OR REPLACE INTO notes (chat_id, symbol, ts, price) VALUES (?,?,?,?)",
+                        (chat_id, symbol, ts, price))
+        self.db.commit()
+
+    def list_notes(self, chat_id):
+        return self.db.execute("SELECT symbol, ts, price FROM notes WHERE chat_id=? ORDER BY ts DESC",
+                               (chat_id,)).fetchall()
+
+    def unnote(self, chat_id, symbol):
+        self.db.execute("DELETE FROM notes WHERE chat_id=? AND symbol=?", (chat_id, symbol))
+        self.db.commit()
+
+    def notes_due(self, cutoff_day):
+        """Note chua bao, ngay note <= cutoff_day -> [(chat_id, symbol, ts, price)]."""
+        return self.db.execute(
+            "SELECT chat_id, symbol, ts, price FROM notes WHERE reported=0 AND substr(ts,1,10) <= ?",
+            (cutoff_day,)).fetchall()
+
+    def mark_note_reported(self, chat_id, symbol, ts):
+        self.db.execute("UPDATE notes SET reported=1 WHERE chat_id=? AND symbol=? AND ts=?",
+                        (chat_id, symbol, ts))
+        self.db.commit()
 
     def get_meta(self, k, default=None):
         row = self.db.execute("SELECT v FROM meta WHERE k=?", (k,)).fetchone()

@@ -95,6 +95,24 @@ class SnapshotRepo(ABC):
     def funds_holding(self, symbol, month): ...        # -> [(fund, pct)] DESC theo pct
 
     @abstractmethod
+    def last_price(self, symbol): ...                  # -> gia khop gan nhat | None
+
+    @abstractmethod
+    def add_note(self, chat_id, symbol, ts, price): ...
+
+    @abstractmethod
+    def list_notes(self, chat_id): ...                 # -> [(symbol, ts, price)] moi -> cu
+
+    @abstractmethod
+    def unnote(self, chat_id, symbol): ...
+
+    @abstractmethod
+    def notes_due(self, cutoff_day): ...               # -> [(chat_id, symbol, ts, price)] chua bao, du tuoi
+
+    @abstractmethod
+    def mark_note_reported(self, chat_id, symbol, ts): ...
+
+    @abstractmethod
     def get_meta(self, k, default=None): ...
 
     @abstractmethod
