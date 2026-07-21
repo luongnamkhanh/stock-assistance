@@ -87,7 +87,7 @@ def run():
          "brokers": [{"n": "TCBS", "debt": 44147}, {"n": "SSI", "debt": 36585, "equity": 30000}]},
     ]
     mt = margin_text(qs)
-    assert "TCBS: 44,147 tỷ" in mt and "445,000" in mt and "122% VCSH" in mt, mt
+    assert "TCBS: 44,147 tỷ (10% thị phần)" in mt and "445,000" in mt and "122% VCSH" in mt, mt
     assert "▲30,000 tỷ (+7% so Q1/2026)" in mt, mt
     assert "Margin/vốn hoá TT: 7.3% — cao nhất trong 3 quý" in mt, mt   # 445000/6100000=7.3%, cao nhat
     assert "💡 Đọc nhanh" in mt and "tăng 2 quý liên tiếp" in mt and "thận trọng" in mt, mt

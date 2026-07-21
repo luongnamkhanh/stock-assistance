@@ -331,10 +331,12 @@ def margin_text(qs):
     latest = qs[-1]
     delta, hot = _margin_delta(qs)
     ratio_line, read = _margin_insight(qs)
+    total = latest["market_total_ty"]
     lines = []
     for i, b in enumerate(latest.get("brokers") or [], 1):
+        share = f" ({b['debt'] / total * 100:.0f}% thị phần)" if total else ""
         vcsh = f" · {b['debt'] / b['equity'] * 100:.0f}% VCSH" if b.get("equity") else ""
-        lines.append(f"{i}. {b['n']}: {b['debt']:,.0f} tỷ{vcsh}")
+        lines.append(f"{i}. {b['n']}: {b['debt']:,.0f} tỷ{share}{vcsh}")
     out = [f"📊 Dư nợ margin CTCK — {latest['quarter']} (nguồn: BCTC quý)",
            f"Toàn thị trường: ~{latest['market_total_ty']:,.0f} tỷ" + (f" · {delta}" if delta else "")]
     if ratio_line:
