@@ -111,7 +111,8 @@ def run_once(repo, feed, flows, tg):
             if not mine:
                 continue
             keu = any(loud or s in watch for s, _, loud in mine)
-            buttons = presenters.note_buttons([s for s, _, _ in mine])  # nut 📌 de note 1 cham
+            # nut 📌 chi cho ma dang luu (manh/hop luu/watch) — cu thuong khong nut, do roi
+            buttons = presenters.note_buttons([s for s, _, loud in mine if loud or s in watch])
             try:
                 tg.send_to(cid, presenters.alert_digest(ts, [m for _, m, _ in mine]),
                            silent=not keu, reply_markup=buttons)
