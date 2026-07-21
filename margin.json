@@ -1,9 +1,10 @@
 {
+  "_note": "Cập nhật mỗi quý từ BCTC CTCK. market_total_ty = tổng dư nợ margin toàn thị trường (tỷ); market_cap_ty = vốn hoá thị trường HOSE (tỷ) — số đang seed là ước lượng, thay bằng số thật.",
   "quarters": [
-    {"quarter": "Q3/2025", "market_total_ty": 370000, "brokers": []},
-    {"quarter": "Q4/2025", "market_total_ty": 412600, "brokers": []},
-    {"quarter": "Q1/2026", "market_total_ty": 415000, "brokers": []},
-    {"quarter": "Q2/2026", "market_total_ty": 445000, "brokers": [
+    {"quarter": "Q3/2025", "market_total_ty": 370000, "market_cap_ty": 5200000, "brokers": []},
+    {"quarter": "Q4/2025", "market_total_ty": 412600, "market_cap_ty": 5500000, "brokers": []},
+    {"quarter": "Q1/2026", "market_total_ty": 415000, "market_cap_ty": 5900000, "brokers": []},
+    {"quarter": "Q2/2026", "market_total_ty": 445000, "market_cap_ty": 6100000, "brokers": [
       {"n": "TCBS", "debt": 44147},
       {"n": "SSI", "debt": 36585},
       {"n": "VPBankS", "debt": 35919},

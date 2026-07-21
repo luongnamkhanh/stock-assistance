@@ -282,34 +282,79 @@ def forcesell_msg(ts, floors, tension=None):
     return body + "\nThông tin tham khảo, không phải khuyến nghị đầu tư."
 
 
-def _margin_delta(latest, prev):
-    """(chuoi mo ta Δ so quy truoc, co_tang_nong) — dung chung /margin va tension line."""
-    if not prev:
+def _margin_delta(qs):
+    """(chuoi Δ so quy truoc, co_tang_nong) tu list quarters."""
+    if len(qs) < 2:
         return "", False
+    latest, prev = qs[-1], qs[-2]
     d = latest["market_total_ty"] - prev["market_total_ty"]
     pct = d / prev["market_total_ty"] * 100 if prev["market_total_ty"] else 0
     return f"{'▲' if d >= 0 else '▼'}{abs(d):,.0f} tỷ ({pct:+.0f}% so {prev['quarter']})", d > 0 and pct >= 10
 
 
-def margin_text(latest, prev):
-    """latest/prev: 2 quy gan nhat tu margin.json — Δ tu tinh, khong nhap tay."""
-    delta, hot = _margin_delta(latest, prev)
+def _margin_ratio(q):
+    """Margin/von hoa TT (%) — None neu thieu von hoa."""
+    cap = q.get("market_cap_ty")
+    return q["market_total_ty"] / cap * 100 if cap else None
+
+
+def _margin_insight(qs):
+    """-> (dong ty le margin/von hoa + vi tri, dong 'doc nhanh' dien giai). ("","") neu thieu von hoa."""
+    r = _margin_ratio(qs[-1])
+    ratios = [x for x in (_margin_ratio(q) for q in qs) if x is not None]
+    if r is None or len(ratios) < 2:
+        return "", ""
+    hi, lo = max(ratios), min(ratios)
+    pos = "cao nhất" if r >= hi else "thấp nhất" if r <= lo else "vùng giữa"
+    streak = 0  # so quy dư no tang lien tiep tinh tu cuoi
+    for i in range(len(qs) - 1, 0, -1):
+        if qs[i]["market_total_ty"] > qs[i - 1]["market_total_ty"]:
+            streak += 1
+        else:
+            break
+    ratio_line = f"Margin/vốn hoá TT: {r:.1f}% — {pos} trong {len(ratios)} quý"
+    near_top = r >= hi * 0.98
+    if near_top and streak >= 2:
+        read = (f"đòn bẩy toàn thị trường ở vùng cao (đỉnh {len(ratios)} quý) và tăng {streak} quý liên tiếp "
+                "— thị trường đang dùng đòn bẩy lớn, cú giảm dễ kích giải chấp dây chuyền. Giai đoạn cần thận trọng.")
+    elif r <= lo * 1.02:
+        read = "đòn bẩy đã hạ về vùng thấp so với các quý gần đây — rủi ro giải chấp thấp, nền lành mạnh hơn."
+    elif streak >= 2:
+        read = f"đòn bẩy đang tăng ({streak} quý liên tiếp) nhưng chưa tới vùng nóng — theo dõi thêm."
+    else:
+        read = "đòn bẩy ở vùng trung bình, chưa có tín hiệu cực đoan."
+    return ratio_line, "💡 Đọc nhanh: " + read
+
+
+def margin_text(qs):
+    """qs: list quarters tu margin.json (cu -> moi) — Δ, ty le/von hoa, vi tri, doc nhanh tu tinh."""
+    latest = qs[-1]
+    delta, hot = _margin_delta(qs)
+    ratio_line, read = _margin_insight(qs)
     lines = []
     for i, b in enumerate(latest.get("brokers") or [], 1):
-        ratio = f" · {b['debt'] / b['equity'] * 100:.0f}% VCSH" if b.get("equity") else ""
-        lines.append(f"{i}. {b['n']}: {b['debt']:,.0f} tỷ{ratio}")
-    head = (f"📊 Dư nợ margin CTCK — {latest['quarter']} (nguồn: BCTC quý)\n"
-            f"Toàn thị trường: ~{latest['market_total_ty']:,.0f} tỷ" + (f" · {delta}" if delta else ""))
-    if hot:
-        head += "\n⚠️ Đòn bẩy toàn thị trường đang tăng nóng — vùng rủi ro cao khi thị trường giảm."
-    body = ("\n" + "\n".join(lines)) if lines else ""
-    return head + body + "\n(Trần quy định: dư nợ ≤ 200% VCSH. Thông tin tham khảo.)"
+        vcsh = f" · {b['debt'] / b['equity'] * 100:.0f}% VCSH" if b.get("equity") else ""
+        lines.append(f"{i}. {b['n']}: {b['debt']:,.0f} tỷ{vcsh}")
+    out = [f"📊 Dư nợ margin CTCK — {latest['quarter']} (nguồn: BCTC quý)",
+           f"Toàn thị trường: ~{latest['market_total_ty']:,.0f} tỷ" + (f" · {delta}" if delta else "")]
+    if ratio_line:
+        out.append(ratio_line)
+    if hot and not read:
+        out.append("⚠️ Đòn bẩy toàn thị trường đang tăng nóng — vùng rủi ro cao khi thị trường giảm.")
+    out += lines
+    if read:
+        out.append(read)
+    out.append("(Trần quy định: dư nợ ≤ 200% VCSH. Thông tin tham khảo.)")
+    return "\n".join(out)
 
 
-def margin_tension_line(latest, prev):
-    delta, hot = _margin_delta(latest, prev)
+def margin_tension_line(qs):
+    latest = qs[-1]
+    r = _margin_ratio(latest)
+    _, hot = _margin_delta(qs)
+    detail = f" (margin/vốn hoá {r:.1f}%)" if r is not None else ""
     warn = " — đòn bẩy đang tăng nóng" if hot else ""
-    return f"Bối cảnh: dư nợ margin toàn ngành {latest['quarter']} ~{latest['market_total_ty']:,.0f} tỷ{warn}"
+    return f"Bối cảnh: dư nợ margin toàn ngành {latest['quarter']} ~{latest['market_total_ty']:,.0f} tỷ{detail}{warn}"
 
 
 def alert_digest(ts, msgs):

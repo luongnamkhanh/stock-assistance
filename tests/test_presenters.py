@@ -79,18 +79,25 @@ def run():
     fs2 = forcesell_msg("2026-07-20T14:05:00+07:00", [("VIX", -6.9)], "Bối cảnh: dư nợ ~445,000 tỷ")
     assert "Bối cảnh: dư nợ" in fs2, fs2
 
-    # margin: Δ so quy truoc tu tinh + canh bao tang nong (+10%)
-    q2 = {"quarter": "Q2/2026", "market_total_ty": 445000,
-          "brokers": [{"n": "TCBS", "debt": 44147}, {"n": "SSI", "debt": 36585, "equity": 30000}]}
-    q1 = {"quarter": "Q1/2026", "market_total_ty": 415000, "brokers": []}
-    mt = margin_text(q2, q1)
+    # margin full: Δ tu tinh + ty le margin/von hoa + vi tri lich su + doc nhanh
+    qs = [
+        {"quarter": "Q3/2025", "market_total_ty": 300000, "market_cap_ty": 5200000, "brokers": []},
+        {"quarter": "Q1/2026", "market_total_ty": 415000, "market_cap_ty": 5900000, "brokers": []},
+        {"quarter": "Q2/2026", "market_total_ty": 445000, "market_cap_ty": 6100000,
+         "brokers": [{"n": "TCBS", "debt": 44147}, {"n": "SSI", "debt": 36585, "equity": 30000}]},
+    ]
+    mt = margin_text(qs)
     assert "TCBS: 44,147 tỷ" in mt and "445,000" in mt and "122% VCSH" in mt, mt
-    assert "▲30,000 tỷ (+7% so Q1/2026)" in mt and "tăng nóng" not in mt, mt   # +7% chua nong
-    hot = {"quarter": "Q3/2025", "market_total_ty": 370000, "brokers": []}
-    q4 = {"quarter": "Q4/2025", "market_total_ty": 412600, "brokers": []}
-    assert "tăng nóng" in margin_text(q4, hot), "q4 vs q3 +11% -> nong"
-    assert margin_text(q2, None).count("so ") == 0, "khong co quy truoc -> khong Δ"
-    assert "445,000 tỷ" in margin_tension_line(q2, q1)
+    assert "▲30,000 tỷ (+7% so Q1/2026)" in mt, mt
+    assert "Margin/vốn hoá TT: 7.3% — cao nhất trong 3 quý" in mt, mt   # 445000/6100000=7.3%, cao nhat
+    assert "💡 Đọc nhanh" in mt and "tăng 2 quý liên tiếp" in mt and "thận trọng" in mt, mt
+    # 1 quy (khong Δ, khong vi tri) van chay
+    assert "445,000" in margin_text([qs[-1]]) and "so " not in margin_text([qs[-1]]).split("nguồn")[1]
+    # thieu von hoa -> khong co dong ty le/doc nhanh
+    noc = margin_text([{"quarter": "Q2/2026", "market_total_ty": 445000, "brokers": []}])
+    assert "Margin/vốn hoá" not in noc and "Đọc nhanh" not in noc, noc
+    tl = margin_tension_line(qs)
+    assert "445,000 tỷ" in tl and "margin/vốn hoá 7.3%" in tl, tl
     print("test_presenters OK")
 
 if __name__ == "__main__":
