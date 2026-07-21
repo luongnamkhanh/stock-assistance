@@ -1,6 +1,6 @@
 """Script TikTok tho (khong header Telegram) — chot 1 lan/ngay vao meta['script:<ngay>'].
 Header + cap Telegram nam o noi gui (presenters.script_msg / TelegramBot.send_to)."""
-from src.config import now_vn
+from src.config import FLOOR_PCT, FORCESELL_MIN, MIN_DAY_VALUE, now_vn
 from src.usecases.build_trend import trend_message
 from src.usecases.funds import fund_summary_text
 
@@ -11,7 +11,9 @@ Cấu trúc bắt buộc (plain text):
 [HOOK] 1 câu mở đầu gây chú ý bằng con số ấn tượng nhất của phiên. Không chào hỏi.
 [THÂN] 3-5 câu ngắn, kể ĐỦ 3 ý theo mạch: (1) chuỗi/xu hướng các phiên gần đây,
 (2) sắc xanh/đỏ và % giá nổi bật của nhóm mã giao dịch lớn, (3) top gom/xả kèm số tỷ;
-thêm điểm bất thường nếu có (đảo chiều, chuỗi phiên dài...).
+thêm điểm bất thường nếu có (đảo chiều, chuỗi phiên dài...). Nếu dữ liệu có dòng "Áp lực giải chấp"
+thì ĐƯA LÊN [HOOK] hoặc câu đầu [THÂN] vì đó là điểm nóng nhất phiên — nêu như DẤU HIỆU
+(vd "nhiều mã nằm sàn, dấu hiệu bán tháo/giải chấp diện rộng"), KHÔNG phán chắc, KHÔNG hù dọa kiểu "sắp sập".
 [KẾT] 1 câu mời theo dõi kênh để cập nhật phiên sau.
 Dòng cuối: 4-5 hashtag tiếng Việt.
 
@@ -30,6 +32,10 @@ def make_script(repo, flows, llm):
     if ts:  # % gia nhom GTGD lon — de script co the ke ve sac xanh/do (canh heatmap)
         heat = repo.heat(ts, 8)
         data += "\nGiá mã GTGD lớn hôm nay: " + ", ".join(f"{s} {p:+.1f}%" for s, p in heat)
+        floors = repo.floor_stocks(ts, FLOOR_PCT, MIN_DAY_VALUE)  # giai chap dien rong -> diem nong phien
+        if len(floors) >= FORCESELL_MIN:
+            data += (f"\nÁp lực giải chấp: {len(floors)} mã thanh khoản lớn giảm sàn/gần sàn ("
+                     + ", ".join(s for s, _ in floors[:6]) + ") — dấu hiệu bán tháo/giải chấp diện rộng.")
     data += fund_summary_text(repo)  # hop luu quy mo — canh scene "funds" cua video
     text = llm.complete(SCRIPT_SYSTEM, f"Dữ liệu phiên hôm nay:\n\n{data}\n\nViết script.").strip()
     repo.set_meta(key, text)

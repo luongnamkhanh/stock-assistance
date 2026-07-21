@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from src.config import MOVERS_MIN_NET, now_vn
 from src.usecases.funds import fund_data, fund_summary_text, holders_of
+from src.usecases.margin import market_tension
 
 _RULES = """Quy tắc: giọng bản tin dữ liệu, nói chuyện tự nhiên, xưng "mình", câu ngắn dễ đọc
 thành tiếng, số liệu làm tròn cho dễ nghe, luôn nói rõ "cả tuần"/"tuần này" để không lẫn với video ngày.
@@ -21,6 +22,8 @@ Cấu trúc bắt buộc (plain text):
 [HOOK] 1 câu mở đầu bằng con số ấn tượng nhất của TUẦN. Không chào hỏi.
 [THÂN] 3-4 câu ngắn: (1) lũy kế cả tuần và phiên nào gãy/đảo chiều, (2) VN-Index cả tuần
 tăng/giảm bao nhiêu phần trăm, (3) top gom/xả cả tuần kèm số tỷ và % giá tuần — mỗi chiều tối đa 2 mã.
+Nếu dữ liệu có dòng "Bối cảnh: dư nợ margin" thì thêm 1 câu về mức đòn bẩy toàn thị trường (vd
+"margin toàn ngành đang ở vùng cao, thị trường dễ rung khi giảm") — nêu như bối cảnh, KHÔNG hù dọa.
 [KẾT] 1 câu teaser cho phần 2: mai mình nói các quỹ mở đang rót tiền vào những mã nào — mời follow.
 Dòng cuối: 4-5 hashtag tiếng Việt.
 
@@ -112,6 +115,9 @@ def _week_data(repo, flows, d1, d2, part):
             if rows2:
                 data += f"\n{label}: " + ", ".join(
                     f"{s} {v / 1e9:+,.0f} tỷ (giá tuần {p:+.1f}%)" for s, v, _, p in rows2)
+        t = market_tension()  # boi canh don bay margin toan nganh (theo quy)
+        if t:
+            data += f"\n{t}"
     else:
         gom, xa = week_fusion(repo, flows, d1, d2)
         for label, rows2 in (("Khối ngoại gom cả tuần", gom), ("Khối ngoại xả cả tuần", xa)):
