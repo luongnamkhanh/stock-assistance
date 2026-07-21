@@ -4,16 +4,26 @@ from datetime import datetime
 
 from src.adapters import presenters
 from src.config import (ACCEL_MIN_LAST, ACCEL_MIN_SHARE, ALERT_MIN_NET, ALERT_MIN_SHARE,
-                        COOLDOWN_MINUTES, DAY_NET_TH, MIN_DAY_VALUE, RATE_TH, STALL_MINUTES,
-                        WINDOW_MINUTES, WL_FACTOR)
+                        COOLDOWN_MINUTES, DAY_NET_TH, FUND_CONFLUENCE_MIN, MIN_DAY_VALUE,
+                        RATE_TH, STALL_MINUTES, WINDOW_MINUTES, WL_FACTOR)
 from src.domain import signals
 from src.domain.entities import Accel, RegimeChange, Spike
 from src.usecases.build_trend import trend_ctx
+from src.usecases.funds import holders_of
 from src.usecases.poll_market import poll
+
+# "loud" = tin hieu dang keo chuong (lam phien user); con lai gui im lang.
+SPIKE_LOUD_SHARE = 0.8   # spike chiem > 80% GTGD nhip -> nghi thoa thuan, dang chu y
+
+
+def _confluence(sym, buy_side, repo):
+    """Hop luu: chieu MUA/GOM + >= FUND_CONFLUENCE_MIN quy mo dang nam -> tin hieu manh."""
+    return buy_side and holders_of(repo, sym) >= FUND_CONFLUENCE_MIN
 
 
 def detect_spikes(repo, flows, ts, wl):
-    """-> [(sym, msg, wl_only)] — wl_only: chi qua nguong nho watchlist, giao rieng chat dang watch."""
+    """-> [(sym, msg, wl_only, loud)] — wl_only: chi qua nguong nho watchlist, giao rieng chat watch;
+    loud: dang keu chuong (thoa thuan share>80% hoac hop luu gom+quy)."""
     prev_ts = repo.prev_snapshot_ts(ts, WINDOW_MINUTES)
     if not prev_ts:
         return []
@@ -28,9 +38,10 @@ def detect_spikes(repo, flows, ts, wl):
             continue
         wl_only = f != 1.0 and signals.spike_share(
             net, win_value, day_value, 1.0, MIN_DAY_VALUE, ALERT_MIN_NET, ALERT_MIN_SHARE) is None
+        loud = share > SPIKE_LOUD_SHARE or _confluence(sym, net > 0, repo)
         alerts.append((ts, sym, direction, net, share, price))
         msgs.append((sym, presenters.spike_msg(Spike(sym, net, share, price, pct or 0, day_net))
-                     + trend_ctx(sym, repo, flows), wl_only))
+                     + trend_ctx(sym, repo, flows), wl_only, loud))
     repo.add_alerts(alerts)
     return msgs
 
@@ -57,8 +68,9 @@ def detect_states(repo, flows, ts, wl):
         repo.set_regime(sym, regime, day)  # state luu chung theo nguong wl — chat khong watch co the
         if regime != "NEUTRAL":            # bo lo 1 transition nguong-thap (chap nhan, hiem)
             wl_only = f != 1.0 and signals.classify_regime(day_net, recent, 1.0, DAY_NET_TH, RATE_TH) != regime
+            loud = _confluence(sym, regime.startswith("GOM"), repo)  # gom + nhieu quy -> keu; xa thuong -> im
             msgs.append((sym, presenters.state_msg(RegimeChange(sym, regime, recent, day_net, price or 0, pct or 0))
-                         + trend_ctx(sym, repo, flows), wl_only))
+                         + trend_ctx(sym, repo, flows), wl_only, loud))
     return msgs
 
 
@@ -80,7 +92,7 @@ def detect_accel(repo, flows, ts, wl):
             d1, d2, d3, win3, day_value, 1.0, MIN_DAY_VALUE, ACCEL_MIN_LAST, ACCEL_MIN_SHARE)
         alerts.append((ts, sym, direction, d3, 0, 0))
         msgs.append((sym, presenters.accel_msg(Accel(sym, (d1, d2, d3), day_net, price or 0, pct or 0))
-                     + trend_ctx(sym, repo, flows), wl_only))
+                     + trend_ctx(sym, repo, flows), wl_only, True))  # tang toc: luon keu
     repo.add_alerts(alerts)
     return msgs
 
@@ -91,13 +103,16 @@ def run_once(repo, feed, flows, tg):
     alerts = detect_spikes(repo, flows, ts, wl) + detect_accel(repo, flows, ts, wl) + detect_states(repo, flows, ts, wl)
     print(f"[{ts}] snapshot {n} symbols, {len(alerts)} alerts")
     if alerts:
-        print(presenters.alert_digest(ts, [m for _, m, _ in alerts]))
+        print(presenters.alert_digest(ts, [m for _, m, _, _ in alerts]))
         for cid in tg.cfg.get("chat_ids", []):
-            # alert nguong-thap (wl_only) chi den chat dang watch ma do; alert nguong day den moi chat
-            mine = [m for s, m, wl_only in alerts if not wl_only or s in repo.watchlist(cid)]
-            if mine:
-                try:
-                    tg.send_to(cid, presenters.alert_digest(ts, mine))
-                except Exception as e:
-                    print(f"telegram send failed ({cid}): {e}")
+            watch = repo.watchlist(cid)
+            # wl_only: chi den chat dang watch ma do. loud/watch -> keu chuong; con lai gui im lang
+            mine = [(s, m, loud) for s, m, wl_only, loud in alerts if not wl_only or s in watch]
+            if not mine:
+                continue
+            keu = any(loud or s in watch for s, _, loud in mine)
+            try:
+                tg.send_to(cid, presenters.alert_digest(ts, [m for _, m, _ in mine]), silent=not keu)
+            except Exception as e:
+                print(f"telegram send failed ({cid}): {e}")
     return alerts

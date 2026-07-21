@@ -23,6 +23,7 @@ def run():
     assert len(msgs) == 1 and "GOM" in msgs[0][1] and "CHỮNG" not in msgs[0][1], msgs
     assert "Cả phiên" in msgs[0][1] and "Giá 20,000" in msgs[0][1], msgs
     assert msgs[0][0] == "AAA" and msgs[0][2] is False, "khong watch -> khong phai wl_only"
+    assert msgs[0][3] is False, "GOM khong du quy nam -> khong loud (im lang)"
     snap(r, f"{day}T10:30:00+07:00", "AAA", 20.1e9)
     msgs = detect_states(r, F, f"{day}T10:30:00+07:00", set())
     assert len(msgs) == 1 and "CHỮNG" in msgs[0][1], msgs
@@ -62,7 +63,15 @@ def run():
     msgs = detect_accel(r2, F, f"{day}T10:15:00+07:00", set())
     assert len(msgs) == 1 and "BBB" in msgs[0][1] and "TĂNG TỐC" in msgs[0][1], msgs
     assert "1.2 → 2.7 → 5.0" in msgs[0][1] and "Cả phiên" in msgs[0][1] and msgs[0][2] is False, msgs
+    assert msgs[0][3] is True, "tang toc luon loud (keu chuong)"
     assert detect_accel(r2, F, f"{day}T10:15:00+07:00", set()) == [], "cooldown accel"
+
+    # spike thoa thuan (share > 80%) -> loud du khong watch, khong du quy
+    r9 = SqliteRepo(":memory:")
+    snap(r9, f"{day}T10:00:00+07:00", "TT1", 1e9, dv=100e9)
+    snap(r9, f"{day}T10:10:00+07:00", "TT1", 10e9, dv=110e9)   # net 9 ty / win_value 10 ty = 90% share
+    out = detect_spikes(r9, F, f"{day}T10:10:00+07:00", set())
+    assert len(out) == 1 and out[0][3] is True and "thỏa thuận" in out[0][1], out
 
     # nhip tim dau phien: 1 lan/ngay, chi trong cua so 09:15-10:00, can snapshot hom nay
     class Tg:

@@ -13,11 +13,13 @@ class TelegramBot(Telegram):
         """Initialize with config dict containing 'token' and 'chat_ids'."""
         self.cfg = cfg
 
-    def send_to(self, chat_id, text):
-        """Send text message to a single chat_id (cap 4000 — Telegram limit 4096)."""
+    def send_to(self, chat_id, text, silent=False):
+        """Send text message to a single chat_id (cap 4000 — Telegram limit 4096).
+        silent=True: gui khong am thanh/rung (disable_notification) — tin van den day du, chi khong keu."""
         req = urllib.request.Request(
             f"https://api.telegram.org/bot{self.cfg['token']}/sendMessage",
-            data=json.dumps({"chat_id": chat_id, "text": text[:4000]}).encode(),
+            data=json.dumps({"chat_id": chat_id, "text": text[:4000],
+                             "disable_notification": silent}).encode(),
             headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=15)
 
