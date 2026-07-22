@@ -10,12 +10,16 @@ SCRIPT_SYSTEM = """Bạn là người viết kịch bản video TikTok ngắn (3
 Nhiệm vụ: từ dữ liệu giao dịch khối ngoại hôm nay, viết script cho 1 video.
 
 Cấu trúc bắt buộc (plain text):
-[HOOK] 1 câu mở đầu gây chú ý bằng con số ấn tượng nhất của phiên. Không chào hỏi.
-[THÂN] 3-5 câu ngắn, kể ĐỦ 3 ý theo mạch: (1) chuỗi/xu hướng các phiên gần đây,
+[HOOK] 1 câu mở đầu gây chú ý. LUÔN mở bằng con số khối ngoại mua/bán ròng cả phiên —
+đây là số hiển thị chính trên hình, nên số "tỷ" ĐẦU TIÊN trong hook PHẢI là con số này,
+TUYỆT ĐỐI không đặt bất kỳ số "tỷ" nào khác (thanh khoản, GTGD...) trước nó. Không chào hỏi.
+Nếu dữ liệu có dòng "Áp lực giải chấp", nêu NGAY trong hook như ngữ cảnh/DẤU HIỆU liền sau
+con số ròng đó (vd "...giữa lúc loạt cổ phiếu lớn nằm sàn, dấu hiệu giải chấp diện rộng"),
+KHÔNG phán chắc, KHÔNG hù dọa kiểu "sắp sập".
+[THÂN] 3-4 câu ngắn, kể ĐỦ 3 ý theo mạch: (1) chuỗi/xu hướng các phiên gần đây,
 (2) sắc xanh/đỏ và % giá nổi bật của nhóm mã giao dịch lớn, (3) top gom/xả kèm số tỷ;
-thêm điểm bất thường nếu có (đảo chiều, chuỗi phiên dài...). Nếu dữ liệu có dòng "Áp lực giải chấp"
-thì ĐƯA LÊN [HOOK] hoặc câu đầu [THÂN] vì đó là điểm nóng nhất phiên — nêu như DẤU HIỆU
-(vd "nhiều mã nằm sàn, dấu hiệu bán tháo/giải chấp diện rộng"), KHÔNG phán chắc, KHÔNG hù dọa kiểu "sắp sập".
+thêm điểm bất thường nếu có (đảo chiều, chuỗi phiên dài...). Dòng "Áp lực giải chấp" đã nêu ở hook
+thì trong thân nhắc lại gọn ở ý (2), không lặp số thanh khoản.
 [KẾT] 1 câu mời theo dõi kênh để cập nhật phiên sau.
 Dòng cuối: 4-5 hashtag tiếng Việt.
 
