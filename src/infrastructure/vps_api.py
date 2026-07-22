@@ -30,9 +30,9 @@ def fetch_vps():
     Cung feed goc tu so — gia tri khop tuyet doi voi iBoard (da doi chieu)."""
     global _vps_syms
     if not _vps_syms:
-        _vps_syms = sorted(s["stock_code"] for s in http_json(VPS_LIST, timeout=30)
+        _vps_syms = sorted(s["stock_code"] for s in http_json(VPS_LIST, timeout=15)
                            if s.get("post_to") == "HOSE" and len(s.get("stock_code") or "") == 3)
     rows = []
-    for i in range(0, len(_vps_syms), 100):
-        rows += [_vps_row(x) for x in http_json(VPS_DATA + ",".join(_vps_syms[i:i + 100]), timeout=30)]
+    for i in range(0, len(_vps_syms), 100):  # timeout 15s: fail-fast, khoi block loop 30s moi lan feed cham
+        rows += [_vps_row(x) for x in http_json(VPS_DATA + ",".join(_vps_syms[i:i + 100]), timeout=15)]
     return rows

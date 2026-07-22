@@ -10,6 +10,7 @@ from src.domain import signals
 from src.domain.entities import Accel, RegimeChange, Spike
 from src.usecases import margin
 from src.usecases.build_trend import trend_ctx
+from src.usecases.feed_health import feed_ok
 from src.usecases.funds import holders_of
 from src.usecases.poll_market import poll
 
@@ -117,7 +118,8 @@ def maybe_forcesell(repo, tg, ts):
 
 
 def run_once(repo, feed, flows, tg):
-    ts, n = poll(repo, feed)
+    ts, n = poll(repo, feed)  # raise neu feed timeout -> main bat -> feed_fail
+    feed_ok(repo, tg)         # poll OK -> bao phuc hoi neu truoc do mat feed
     wl = repo.watch_union()
     alerts = detect_spikes(repo, flows, ts, wl) + detect_accel(repo, flows, ts, wl) + detect_states(repo, flows, ts, wl)
     print(f"[{ts}] snapshot {n} symbols, {len(alerts)} alerts")

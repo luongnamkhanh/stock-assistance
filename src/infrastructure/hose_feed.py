@@ -11,7 +11,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0", "Origin": "https://iboard.ssi.com.vn"}
 class HoseFeed(MarketFeed):
     def fetch_hose(self):
         try:
-            data = http_json(API, HEADERS, timeout=30)["data"]
+            data = http_json(API, HEADERS, timeout=15)["data"]
             return [
                 (x["stockSymbol"], x.get("buyForeignValue") or 0, x.get("sellForeignValue") or 0,
                  x.get("buyForeignQtty") or 0, x.get("sellForeignQtty") or 0,

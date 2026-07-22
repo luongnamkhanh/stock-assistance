@@ -16,6 +16,7 @@ from src.infrastructure.sqlite_repo import SqliteRepo
 from src.infrastructure.telegram import TelegramBot
 from src.infrastructure.vndirect_api import VnDirect
 from src.usecases.detect_alerts import run_once
+from src.usecases.feed_health import feed_fail
 from src.usecases.funds import maybe_pull_funds
 from src.usecases.notes import maybe_report_notes
 from src.usecases.scorecard import maybe_send_scorecard
@@ -53,6 +54,7 @@ def main():
                 run_once(repo, feed, flows, tg)
             except Exception as e:
                 print(f"[{now_vn().isoformat(timespec='seconds')}] poll failed: {e}")
+                feed_fail(repo, tg)  # mat feed lien tiep -> canh bao 'bot mu' (khac 'thi truong yen')
             last_poll = time.time()
         maybe_send_open(repo, tg)
         maybe_send_summary(repo, flows, llm, tg)
