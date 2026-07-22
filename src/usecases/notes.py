@@ -8,14 +8,16 @@ from src.config import NOTE_REVIEW_DAYS, now_vn
 
 def add_note(repo, chat_id, sym):
     sym = sym.upper()
-    price = repo.last_price(sym)
-    repo.add_note(chat_id, sym, now_vn().isoformat(timespec="seconds"), price)
+    row = repo.last_row(sym)  # (price, day_net, pct) tai luc note
+    price = row[0] if row else None
+    summary = presenters.note_snapshot(row) if row else ""
+    repo.add_note(chat_id, sym, now_vn().isoformat(timespec="seconds"), price, summary)
     return presenters.note_added_msg(sym, price, NOTE_REVIEW_DAYS)
 
 
 def notes_message(repo, chat_id):
-    """/notes: moi note + % gia tu luc note den hien tai (real-time tu snapshot)."""
-    rows = [(s, ts, p0, repo.last_price(s)) for s, ts, p0 in repo.list_notes(chat_id)]
+    """/notes: moi note kem gia + tom tat tin hieu luc note + % gia toi hien tai."""
+    rows = [(s, ts, p0, summary, repo.last_price(s)) for s, ts, p0, summary in repo.list_notes(chat_id)]
     return presenters.notes_list_text(rows)
 
 
@@ -31,10 +33,10 @@ def maybe_report_notes(repo, tg, now=None):
     cutoff = (date.fromisoformat(today) - timedelta(days=NOTE_REVIEW_DAYS)).isoformat()
     due = repo.notes_due(cutoff)
     by_chat = {}
-    for chat_id, sym, ts, p0 in due:
+    for chat_id, sym, ts, p0, summary in due:
         cur = repo.last_price(sym)
         pct = (cur / p0 - 1) * 100 if p0 and cur else None
-        by_chat.setdefault(chat_id, []).append((sym, ts, pct))
+        by_chat.setdefault(chat_id, []).append((sym, ts, pct, summary))
         repo.mark_note_reported(chat_id, sym, ts)
     for chat_id, items in by_chat.items():
         try:

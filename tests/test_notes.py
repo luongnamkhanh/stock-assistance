@@ -5,8 +5,8 @@ from src.infrastructure.sqlite_repo import SqliteRepo
 from src.usecases.notes import add_note, maybe_report_notes, notes_message
 
 
-def snap(r, ts, sym, price):
-    r.insert_snapshots(ts, [(sym, 0, 0, 0, 0, 0, price, 100e9, 0)])
+def snap(r, ts, sym, price, net=0):
+    r.insert_snapshots(ts, [(sym, net, 0, 0, 0, 0, price, 100e9, 0)])  # buy=net,sell=0 -> day_net=net
 
 
 class Tg:
@@ -23,20 +23,21 @@ def run():
     r = SqliteRepo(":memory:")
     assert "chưa ghi chú" in notes_message(r, 7)
 
-    # note VNM luc gia 58000
-    snap(r, "2026-07-15T10:00:00+07:00", "VNM", 58000)
+    # note VNM luc gia 58000, KN mua rong 6 ty -> summary chup lai tin hieu
+    snap(r, "2026-07-15T10:00:00+07:00", "VNM", 58000, net=6e9)
     msg = add_note(r, 7, "vnm")
     assert "Đã ghi chú VNM" in msg and "58,000" in msg, msg
-    assert r.list_notes(7) == [("VNM", r.list_notes(7)[0][1], 58000.0)]
-    # bam lai cung ma (gia doi) -> KHONG trung, giu note dau (bookmark 1 ma = 1 dong)
-    snap(r, "2026-07-15T11:00:00+07:00", "VNM", 60000)
+    n = r.list_notes(7)
+    assert len(n) == 1 and n[0][0] == "VNM" and n[0][2] == 58000.0 and "mua ròng 6 tỷ" in n[0][3], n
+    # bam lai cung ma (gia doi) -> KHONG trung, giu note dau (gia + summary goc)
+    snap(r, "2026-07-15T11:00:00+07:00", "VNM", 60000, net=99e9)
     add_note(r, 7, "VNM")
     assert len(r.list_notes(7)) == 1 and r.list_notes(7)[0][2] == 58000.0, r.list_notes(7)
 
-    # gia len 60900 -> /notes hien +5.0%
+    # gia len 60900 -> /notes hien gia luc note + summary + % toi nay
     snap(r, "2026-07-16T10:00:00+07:00", "VNM", 60900)
     nm = notes_message(r, 7)
-    assert "VNM" in nm and "+5.0%" in nm, nm
+    assert "58,000đ" in nm and "mua ròng 6 tỷ" in nm and "+5.0%" in nm, nm
 
     # note cua chat khac khong lan
     assert "chưa ghi chú" in notes_message(r, 99)

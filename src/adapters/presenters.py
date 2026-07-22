@@ -238,24 +238,33 @@ def note_added_msg(sym, price, days):
             f"Bot sẽ tự báo kết quả sau ~{days} phiên. Thông tin tham khảo, không phải khuyến nghị.")
 
 
+def note_snapshot(row):
+    """row=(price, day_net, pct) -> tom tat tin hieu luc note (khong kem gia — gia hien rieng)."""
+    _, day_net, _ = row
+    return f"KN {'mua' if day_net >= 0 else 'bán'} ròng {abs(day_net) / 1e9:,.0f} tỷ cả phiên"
+
+
 def notes_list_text(rows):
-    """rows: [(sym, ts, price_luc_note, gia_hien_tai)]."""
+    """rows: [(sym, ts, price_luc_note, summary, gia_hien_tai)]."""
     if not rows:
-        return "Bạn chưa ghi chú mã nào. Thấy tín hiệu muốn theo dõi thì gõ /note MÃ."
+        return "Bạn chưa ghi chú mã nào. Thấy tín hiệu muốn theo dõi thì bấm nút 📌 dưới cảnh báo."
     lines = []
-    for sym, ts, p0, cur in rows:
-        chg = f"{(cur / p0 - 1) * 100:+.1f}%" if p0 and cur else "—"
-        lines.append(f"• {sym} (từ {ts[8:10]}/{ts[5:7]}): {chg}")
-    return ("📌 Ghi chú của bạn — % giá từ lúc note đến hiện tại:\n" + "\n".join(lines)
+    for sym, ts, p0, summary, cur in rows:
+        at = f" @ {p0:,.0f}đ" if p0 else ""
+        ctx = f" — {summary}" if summary else ""
+        chg = f" · nay {(cur / p0 - 1) * 100:+.1f}%" if p0 and cur else ""
+        lines.append(f"• {sym} ({ts[8:10]}/{ts[5:7]}){at}{ctx}{chg}")
+    return ("📌 Ghi chú của bạn:\n" + "\n".join(lines)
             + "\n(/unnote MÃ để xóa · thông tin tham khảo)")
 
 
 def note_report_text(items):
-    """items: [(sym, ts, pct|None)] — bot tu bao sau vai phien."""
+    """items: [(sym, ts, pct|None, summary)] — bot tu bao sau vai phien."""
     lines = []
-    for sym, ts, pct in items:
+    for sym, ts, pct, summary in items:
         chg = f"{pct:+.1f}%" if pct is not None else "(không có giá)"
-        lines.append(f"• {sym} (ghi chú {ts[8:10]}/{ts[5:7]}): {chg}")
+        ctx = f" ({summary})" if summary else ""
+        lines.append(f"• {sym} — ghi chú {ts[8:10]}/{ts[5:7]}{ctx}: nay {chg}")
     return ("🔔 Cập nhật mã bạn đã ghi chú:\n" + "\n".join(lines)
             + "\nThông tin tham khảo, không phải khuyến nghị đầu tư.")
 

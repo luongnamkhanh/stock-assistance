@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS watchlist (  -- rieng tung chat: /watch cua ai nguoi 
 CREATE TABLE IF NOT EXISTS notes (      -- user note 1 ma de theo doi (bookmark 1 ma = 1 dong)
     chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, ts TEXT NOT NULL,  -- ts note lan dau (ISO)
     price REAL,             -- gia luc note (snapshot moi nhat)
+    summary TEXT,           -- tom tat tin hieu luc note (KN net + %)
     reported INTEGER DEFAULT 0,  -- da bao lai ket qua chua
     PRIMARY KEY (chat_id, symbol)
 );
@@ -77,7 +78,8 @@ class SqliteRepo(SnapshotRepo):
         for stmt in ("ALTER TABLE snapshots ADD COLUMN pct REAL",          # migrate DB cu
                      "ALTER TABLE fund_holdings ADD COLUMN volume REAL",
                      "ALTER TABLE fund_holdings ADD COLUMN value REAL",
-                     "ALTER TABLE fund_snapshot ADD COLUMN aum REAL"):
+                     "ALTER TABLE fund_snapshot ADD COLUMN aum REAL",
+                     "ALTER TABLE notes ADD COLUMN summary TEXT"):
             try:
                 self.db.execute(stmt)
             except sqlite3.OperationalError:
@@ -305,14 +307,20 @@ class SqliteRepo(SnapshotRepo):
                             (symbol,)).fetchone()
         return r[0] if r else None
 
-    def add_note(self, chat_id, symbol, ts, price):
+    def last_row(self, symbol):
+        """(price, day_net, pct) tai snapshot moi nhat cua ma — cho tom tat tin hieu luc note."""
+        return self.db.execute(
+            "SELECT price, buy_val - sell_val, COALESCE(pct, 0) FROM snapshots "
+            "WHERE symbol=? ORDER BY ts DESC LIMIT 1", (symbol,)).fetchone()
+
+    def add_note(self, chat_id, symbol, ts, price, summary):
         # OR IGNORE: bam lai cung ma -> giu note dau (khong trung, khong reset ngay theo doi)
-        self.db.execute("INSERT OR IGNORE INTO notes (chat_id, symbol, ts, price) VALUES (?,?,?,?)",
-                        (chat_id, symbol, ts, price))
+        self.db.execute("INSERT OR IGNORE INTO notes (chat_id, symbol, ts, price, summary) VALUES (?,?,?,?,?)",
+                        (chat_id, symbol, ts, price, summary))
         self.db.commit()
 
     def list_notes(self, chat_id):
-        return self.db.execute("SELECT symbol, ts, price FROM notes WHERE chat_id=? ORDER BY ts DESC",
+        return self.db.execute("SELECT symbol, ts, price, summary FROM notes WHERE chat_id=? ORDER BY ts DESC",
                                (chat_id,)).fetchall()
 
     def unnote(self, chat_id, symbol):
@@ -320,9 +328,9 @@ class SqliteRepo(SnapshotRepo):
         self.db.commit()
 
     def notes_due(self, cutoff_day):
-        """Note chua bao, ngay note <= cutoff_day -> [(chat_id, symbol, ts, price)]."""
+        """Note chua bao, ngay note <= cutoff_day -> [(chat_id, symbol, ts, price, summary)]."""
         return self.db.execute(
-            "SELECT chat_id, symbol, ts, price FROM notes WHERE reported=0 AND substr(ts,1,10) <= ?",
+            "SELECT chat_id, symbol, ts, price, summary FROM notes WHERE reported=0 AND substr(ts,1,10) <= ?",
             (cutoff_day,)).fetchall()
 
     def mark_note_reported(self, chat_id, symbol, ts):

@@ -101,16 +101,19 @@ class SnapshotRepo(ABC):
     def last_price(self, symbol): ...                  # -> gia khop gan nhat | None
 
     @abstractmethod
-    def add_note(self, chat_id, symbol, ts, price): ...
+    def last_row(self, symbol): ...                    # -> (price, day_net, pct) | None
 
     @abstractmethod
-    def list_notes(self, chat_id): ...                 # -> [(symbol, ts, price)] moi -> cu
+    def add_note(self, chat_id, symbol, ts, price, summary): ...
+
+    @abstractmethod
+    def list_notes(self, chat_id): ...                 # -> [(symbol, ts, price, summary)] moi -> cu
 
     @abstractmethod
     def unnote(self, chat_id, symbol): ...
 
     @abstractmethod
-    def notes_due(self, cutoff_day): ...               # -> [(chat_id, symbol, ts, price)] chua bao, du tuoi
+    def notes_due(self, cutoff_day): ...               # -> [(chat_id, symbol, ts, price, summary)] chua bao, du tuoi
 
     @abstractmethod
     def mark_note_reported(self, chat_id, symbol, ts): ...
