@@ -280,10 +280,12 @@ def open_msg(ts, net, ups, top_n, n_syms):
             f"{abs(net) / 1e9:,.0f} tỷ · nhóm GTGD lớn {ups}/{top_n} mã xanh · đang quét {n_syms} mã HOSE")
 
 
-def forcesell_msg(ts, floors, tension=None):
-    """floors: [(sym, pct)] cac ma (gan) san, DESC theo GTGD; tension: dong boi canh margin (optional)."""
-    ex = ", ".join(f"{s} {p:.1f}%" for s, p in floors[:6])
-    body = (f"🚨 {ts[11:16]} — {len(floors)} mã thanh khoản lớn đang giảm sàn/gần sàn\n"
+def forcesell_msg(ts, floors, gtgd, tension=None):
+    """floors: [(sym, pct, day_value)] cac ma (gan) san, DESC theo GTGD; gtgd: tong GTGD ma san;
+    tension: dong boi canh margin (optional)."""
+    ex = ", ".join(f"{s} {p:.1f}%" for s, p, _ in floors[:6])
+    body = (f"🚨 {ts[11:16]} — {len(floors)} mã thanh khoản lớn giảm sàn/gần sàn "
+            f"(tổng GTGD ~{gtgd / 1e9:,.0f} tỷ)\n"
             f"{ex}{'...' if len(floors) > 6 else ''}\n"
             "Dấu hiệu bán tháo / giải chấp diện rộng — thường rơi vào khung 10-11h và 14h.")
     if tension:

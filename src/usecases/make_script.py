@@ -1,6 +1,6 @@
 """Script TikTok tho (khong header Telegram) — chot 1 lan/ngay vao meta['script:<ngay>'].
 Header + cap Telegram nam o noi gui (presenters.script_msg / TelegramBot.send_to)."""
-from src.config import FLOOR_PCT, FORCESELL_MIN, MIN_DAY_VALUE, now_vn
+from src.config import FLOOR_PCT, FORCESELL_MIN_GTGD, FORCESELL_MIN_STOCKS, MIN_DAY_VALUE, now_vn
 from src.usecases.build_trend import trend_message
 from src.usecases.funds import fund_summary_text
 
@@ -33,9 +33,11 @@ def make_script(repo, flows, llm):
         heat = repo.heat(ts, 8)
         data += "\nGiá mã GTGD lớn hôm nay: " + ", ".join(f"{s} {p:+.1f}%" for s, p in heat)
         floors = repo.floor_stocks(ts, FLOOR_PCT, MIN_DAY_VALUE)  # giai chap dien rong -> diem nong phien
-        if len(floors) >= FORCESELL_MIN:
-            data += (f"\nÁp lực giải chấp: {len(floors)} mã thanh khoản lớn giảm sàn/gần sàn ("
-                     + ", ".join(s for s, _ in floors[:6]) + ") — dấu hiệu bán tháo/giải chấp diện rộng.")
+        gtgd = sum(dv for _, _, dv in floors)
+        if len(floors) >= FORCESELL_MIN_STOCKS and gtgd >= FORCESELL_MIN_GTGD:
+            data += (f"\nÁp lực giải chấp: {len(floors)} mã thanh khoản lớn giảm sàn/gần sàn "
+                     f"(tổng GTGD {gtgd / 1e9:,.0f} tỷ: " + ", ".join(s for s, _, _ in floors[:6])
+                     + ") — dấu hiệu bán tháo/giải chấp diện rộng.")
     data += fund_summary_text(repo)  # hop luu quy mo — canh scene "funds" cua video
     text = llm.complete(SCRIPT_SYSTEM, f"Dữ liệu phiên hôm nay:\n\n{data}\n\nViết script.").strip()
     repo.set_meta(key, text)

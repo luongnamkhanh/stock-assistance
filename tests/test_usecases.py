@@ -94,8 +94,8 @@ def run():
     maybe_send_open(r5, tg, now=at(10, 30))
     assert len(tg.sent) == 1, "qua 10:00 khong gui muon"
 
-    # forcesell: >= FORCESELL_MIN ma GTGD lon (gan) san -> canh bao broadcast 1 lan/ngay
-    from src.config import FORCESELL_MIN
+    # forcesell: >= FORCESELL_MIN_STOCKS ma san VA tong GTGD san >= FORCESELL_MIN_GTGD -> broadcast 1 lan/ngay
+    from src.config import FORCESELL_MIN_GTGD, FORCESELL_MIN_STOCKS
     from src.usecases.detect_alerts import maybe_forcesell
 
     class FTg:
@@ -105,18 +105,21 @@ def run():
             self.sent.append((cid, text))
 
     fts = f"{day}T10:30:00+07:00"
+    big_dv = FORCESELL_MIN_GTGD / FORCESELL_MIN_STOCKS + 1e9   # moi ma du keo tong qua nguong
     r10 = SqliteRepo(":memory:")
-    for i in range(FORCESELL_MIN):
-        snap(r10, fts, f"F{i:02d}", 1e9, dv=50e9, pct=-6.8)   # gan san, GTGD lon
-    snap(r10, fts, "GRN", 1e9, dv=50e9, pct=1.0)              # xanh -> khong tinh
-    snap(r10, fts, "PNY", 1e9, dv=1e9, pct=-6.9)              # san nhung GTGD nho -> loai
+    for i in range(FORCESELL_MIN_STOCKS):
+        snap(r10, fts, f"F{i:02d}", 1e9, dv=big_dv, pct=-6.8)  # gan san, GTGD lon
+    snap(r10, fts, "GRN", 1e9, dv=big_dv, pct=1.0)             # xanh -> khong tinh
+    snap(r10, fts, "PNY", 1e9, dv=1e9, pct=-6.9)               # san nhung GTGD nho -> loai
     tgf = FTg()
     maybe_forcesell(r10, tgf, fts)
-    assert len(tgf.sent) == 1 and "giảm sàn" in tgf.sent[0][1] and str(FORCESELL_MIN) in tgf.sent[0][1], tgf.sent
+    assert len(tgf.sent) == 1 and "giảm sàn" in tgf.sent[0][1] and "tổng GTGD" in tgf.sent[0][1], tgf.sent
     maybe_forcesell(r10, tgf, fts)
     assert len(tgf.sent) == 1, "1 lan/ngay"
-    r11 = SqliteRepo(":memory:")   # duoi nguong -> khong bao
-    snap(r11, fts, "F1", 1e9, dv=50e9, pct=-6.8)
+    # du so ma nhung tong GTGD duoi nguong -> khong bao (cot loi cua doi logic: do tien, khong dem dau ma)
+    r11 = SqliteRepo(":memory:")
+    for i in range(FORCESELL_MIN_STOCKS + 2):
+        snap(r11, fts, f"S{i:02d}", 1e9, dv=100e9, pct=-6.8)
     tgf2 = FTg()
     maybe_forcesell(r11, tgf2, fts)
     assert tgf2.sent == []

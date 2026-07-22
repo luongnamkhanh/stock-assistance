@@ -26,7 +26,8 @@ STORY_ROOM_MIN = 500_000   # story_line: |room delta| >= 0.5tr cp moi nhac  # po
 FUND_CONFLUENCE_MIN = 10    # alert kem chuong: gom + >= 10 quy mo dang nam -> tin hieu hop luu (loud)
 NOTE_REVIEW_DAYS = 5        # note: bao lai ket qua sau ~5 phien
 FLOOR_PCT = -6.5           # forcesell: ma giam <= -6.5% coi nhu (gan) san HOSE (bien do 7%)
-FORCESELL_MIN = 15         # >= 15 ma GTGD lon gan san -> canh bao ban thao/giai chap dien rong  # ponytail: nguong tho, chinh khi thay nhieu/it qua
+FORCESELL_MIN_STOCKS = 3   # >= 3 ma (gan) san moi coi la "dien rong" (khong phai 1 ma trụ le loi)
+FORCESELL_MIN_GTGD = 1500e9  # + tong GTGD ma san >= 1500 ty -> ban thao/giai chap dang chu y  # ponytail: do "tien bi dap san", chinh khi thay nhieu/it qua. Bat ca "5 ma tru nghin ty" lan "nhieu ma nho"
 DB = Path(os.environ.get("DB_PATH", str(ROOT / "flows.db")))
 CONFIG = ROOT / "telegram.json"  # {"token": ..., "chat_id": ...} — keep private
 VN_TZ = timezone(timedelta(hours=7))
