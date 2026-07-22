@@ -239,11 +239,16 @@ class SqliteRepo(SnapshotRepo):
         return self.db.execute("SELECT COUNT(*) FROM snapshots WHERE ts=?", (ts,)).fetchone()[0]
 
     def floor_stocks(self, ts, floor_pct, min_dv, n=100):
-        """[(symbol, pct, day_value)] cac ma GTGD lon giam <= floor_pct tai ts, DESC theo GTGD."""
+        """[(symbol, pct, day_value, prev_day_value)] ma GTGD lon giam <= floor_pct tai ts, DESC theo GTGD.
+        prev_day_value = GTGD nhip poll lien truoc (None neu chua co) -> tinh 'san cung' (GTGD tac)."""
+        prev = self.db.execute("SELECT MAX(ts) FROM snapshots WHERE ts < ? AND ts >= ?",
+                               (ts, ts[:10])).fetchone()[0]
         return self.db.execute(
-            "SELECT symbol, COALESCE(pct,0), day_value FROM snapshots WHERE ts=? AND COALESCE(pct,0) <= ? "
-            "AND day_value >= ? ORDER BY day_value DESC LIMIT ?",
-            (ts, floor_pct, min_dv, n)).fetchall()
+            "SELECT a.symbol, COALESCE(a.pct,0), a.day_value, b.day_value "
+            "FROM snapshots a LEFT JOIN snapshots b ON b.symbol=a.symbol AND b.ts=? "
+            "WHERE a.ts=? AND COALESCE(a.pct,0) <= ? AND a.day_value >= ? "
+            "ORDER BY a.day_value DESC LIMIT ?",
+            (prev, ts, floor_pct, min_dv, n)).fetchall()
 
     def top_net_full(self, ts, min_net):
         return self.db.execute(

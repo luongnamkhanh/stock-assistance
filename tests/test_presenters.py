@@ -73,12 +73,14 @@ def run():
 
     # forcesell (+ tension optional)
     from src.adapters.presenters import forcesell_msg, margin_text, margin_tension_line
-    fs = forcesell_msg("2026-07-20T14:05:00+07:00", [("VIX", -6.9, 800e9), ("SHB", -6.7, 700e9)], 1500e9)
-    assert "2 mã" in fs and "VIX -6.9%" in fs and "giải chấp" in fs and "khuyến nghị" in fs, fs
-    assert "1,500 tỷ" in fs, fs
+    fs = forcesell_msg("2026-07-20T14:05:00+07:00",
+                       [("VIX", -6.9, 800e9, True), ("SHB", -6.7, 700e9, False)], 1500e9)
+    assert "2 mã" in fs and "🧊VIX -6.9%" in fs and "giải chấp" in fs and "khuyến nghị" in fs, fs
+    assert "1,500 tỷ" in fs and "sàn cứng" in fs, fs
     assert "Bối cảnh" not in fs, "khong tension -> khong dong boi canh"
-    fs2 = forcesell_msg("2026-07-20T14:05:00+07:00", [("VIX", -6.9, 800e9)], 800e9, "Bối cảnh: dư nợ ~445,000 tỷ")
-    assert "Bối cảnh: dư nợ" in fs2, fs2
+    fs2 = forcesell_msg("2026-07-20T14:05:00+07:00", [("VIX", -6.9, 800e9, False)], 800e9,
+                        "Bối cảnh: dư nợ ~445,000 tỷ")
+    assert "Bối cảnh: dư nợ" in fs2 and "sàn cứng" not in fs2, fs2
 
     # margin full: Δ tu tinh + ty le margin/von hoa + vi tri lich su + doc nhanh
     qs = [

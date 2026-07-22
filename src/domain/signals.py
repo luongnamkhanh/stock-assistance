@@ -28,6 +28,13 @@ def is_accel(d1, d2, d3, win3, day_value, factor, min_day_value, min_last, min_s
     return win3 > 0 and abs(d3) / win3 >= min_share
 
 
+def is_locked(day_value, prev_day_value, share_th):
+    """San cung: GTGD nhip nay tang < share_th * tong ngay -> du ban san khong khop (mat thanh khoan)."""
+    if prev_day_value is None or day_value <= 0:
+        return False
+    return (day_value - prev_day_value) < share_th * day_value
+
+
 def trend_stats(nets):
     """Phan tich chuoi phien. Precondition: nets khong rong — caller (presenter) guard truoc."""
     cum, buys = sum(nets), sum(v > 0 for v in nets)

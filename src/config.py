@@ -28,6 +28,7 @@ NOTE_REVIEW_DAYS = 5        # note: bao lai ket qua sau ~5 phien
 FLOOR_PCT = -6.5           # forcesell: ma giam <= -6.5% coi nhu (gan) san HOSE (bien do 7%)
 FORCESELL_MIN_STOCKS = 3   # >= 3 ma (gan) san moi coi la "dien rong" (khong phai 1 ma trụ le loi)
 FORCESELL_MIN_GTGD = 1500e9  # + tong GTGD ma san >= 1500 ty -> ban thao/giai chap dang chu y  # ponytail: do "tien bi dap san", chinh khi thay nhieu/it qua. Bat ca "5 ma tru nghin ty" lan "nhieu ma nho"
+FLOOR_LOCK_SHARE = 0.005   # san cung: GTGD 1 nhip poll tang < 0.5% tong ngay -> du ban san khong khop (mat thanh khoan, ngoi no giai chap cheo)  # ponytail: nguong tho, cuoi phien ty le tu nho lai -> co the phai ha late-day
 DB = Path(os.environ.get("DB_PATH", str(ROOT / "flows.db")))
 CONFIG = ROOT / "telegram.json"  # {"token": ..., "chat_id": ...} — keep private
 VN_TZ = timezone(timedelta(hours=7))

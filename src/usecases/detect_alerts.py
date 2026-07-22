@@ -4,9 +4,9 @@ from datetime import datetime
 
 from src.adapters import presenters
 from src.config import (ACCEL_MIN_LAST, ACCEL_MIN_SHARE, ALERT_MIN_NET, ALERT_MIN_SHARE,
-                        COOLDOWN_MINUTES, DAY_NET_TH, FLOOR_PCT, FORCESELL_MIN_GTGD,
-                        FORCESELL_MIN_STOCKS, FUND_CONFLUENCE_MIN, MIN_DAY_VALUE, RATE_TH,
-                        STALL_MINUTES, WINDOW_MINUTES, WL_FACTOR)
+                        COOLDOWN_MINUTES, DAY_NET_TH, FLOOR_LOCK_SHARE, FLOOR_PCT,
+                        FORCESELL_MIN_GTGD, FORCESELL_MIN_STOCKS, FUND_CONFLUENCE_MIN,
+                        MIN_DAY_VALUE, RATE_TH, STALL_MINUTES, WINDOW_MINUTES, WL_FACTOR)
 from src.domain import signals
 from src.domain.entities import Accel, RegimeChange, Spike
 from src.usecases import margin
@@ -108,11 +108,13 @@ def maybe_forcesell(repo, tg, ts):
     if repo.get_meta("forcesell_day") == day:
         return
     floors = repo.floor_stocks(ts, FLOOR_PCT, MIN_DAY_VALUE)
-    gtgd = sum(dv for _, _, dv in floors)
+    gtgd = sum(dv for _, _, dv, _ in floors)
     if len(floors) < FORCESELL_MIN_STOCKS or gtgd < FORCESELL_MIN_GTGD:
         return
     repo.set_meta("forcesell_day", day)
-    text = presenters.forcesell_msg(ts, floors, gtgd, margin.market_tension())  # ghep boi canh margin quy
+    # gan co san-cung (GTGD tac = du ban khong khop = mat thanh khoan, ngoi no giai chap cheo)
+    marked = [(s, p, dv, signals.is_locked(dv, pdv, FLOOR_LOCK_SHARE)) for s, p, dv, pdv in floors]
+    text = presenters.forcesell_msg(ts, marked, gtgd, margin.market_tension())  # ghep boi canh margin quy
     for cid in tg.cfg.get("chat_ids", []):
         try:
             tg.send_to(cid, text)  # keu — tin hieu rui ro dien rong dang chu y

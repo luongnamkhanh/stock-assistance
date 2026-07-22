@@ -281,13 +281,16 @@ def open_msg(ts, net, ups, top_n, n_syms):
 
 
 def forcesell_msg(ts, floors, gtgd, tension=None):
-    """floors: [(sym, pct, day_value)] cac ma (gan) san, DESC theo GTGD; gtgd: tong GTGD ma san;
-    tension: dong boi canh margin (optional)."""
-    ex = ", ".join(f"{s} {p:.1f}%" for s, p, _ in floors[:6])
+    """floors: [(sym, pct, day_value, locked)] ma (gan) san DESC theo GTGD; locked=san cung (GTGD tac);
+    gtgd: tong GTGD ma san; tension: dong boi canh margin (optional)."""
+    shown = floors[:6]
+    ex = ", ".join(f"{'🧊' if lk else ''}{s} {p:.1f}%" for s, p, _, lk in shown)
     body = (f"🚨 {ts[11:16]} — {len(floors)} mã thanh khoản lớn giảm sàn/gần sàn "
             f"(tổng GTGD ~{gtgd / 1e9:,.0f} tỷ)\n"
             f"{ex}{'...' if len(floors) > 6 else ''}\n"
             "Dấu hiệu bán tháo / giải chấp diện rộng — thường rơi vào khung 10-11h và 14h.")
+    if any(lk for _, _, _, lk in shown):
+        body += "\n🧊 = sàn cứng, dư bán chất đống không khớp (mất thanh khoản)."
     if tension:
         body += f"\n{tension}"
     return body + "\nThông tin tham khảo, không phải khuyến nghị đầu tư."
