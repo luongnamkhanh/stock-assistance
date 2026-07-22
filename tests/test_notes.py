@@ -28,6 +28,10 @@ def run():
     msg = add_note(r, 7, "vnm")
     assert "Đã ghi chú VNM" in msg and "58,000" in msg, msg
     assert r.list_notes(7) == [("VNM", r.list_notes(7)[0][1], 58000.0)]
+    # bam lai cung ma (gia doi) -> KHONG trung, giu note dau (bookmark 1 ma = 1 dong)
+    snap(r, "2026-07-15T11:00:00+07:00", "VNM", 60000)
+    add_note(r, 7, "VNM")
+    assert len(r.list_notes(7)) == 1 and r.list_notes(7)[0][2] == 58000.0, r.list_notes(7)
 
     # gia len 60900 -> /notes hien +5.0%
     snap(r, "2026-07-16T10:00:00+07:00", "VNM", 60900)

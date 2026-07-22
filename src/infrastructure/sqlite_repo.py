@@ -30,11 +30,11 @@ CREATE TABLE IF NOT EXISTS day_story (   -- dac tinh tung phien, chot luc tong k
 );
 CREATE TABLE IF NOT EXISTS watchlist (  -- rieng tung chat: /watch cua ai nguoi do huong
     chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, PRIMARY KEY (chat_id, symbol));
-CREATE TABLE IF NOT EXISTS notes (      -- user note 1 tin hieu de theo doi + bot bao lai sau vai phien
-    chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, ts TEXT NOT NULL,  -- ts luc note (ISO)
+CREATE TABLE IF NOT EXISTS notes (      -- user note 1 ma de theo doi (bookmark 1 ma = 1 dong)
+    chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, ts TEXT NOT NULL,  -- ts note lan dau (ISO)
     price REAL,             -- gia luc note (snapshot moi nhat)
     reported INTEGER DEFAULT 0,  -- da bao lai ket qua chua
-    PRIMARY KEY (chat_id, symbol, ts)
+    PRIMARY KEY (chat_id, symbol)
 );
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS fund_holdings (  -- top 10 khoan/quy tu Fmarket, chup 1 lan/thang
@@ -88,6 +88,17 @@ class SqliteRepo(SnapshotRepo):
             self.db.execute("ALTER TABLE watchlist RENAME TO watchlist_old")
             self.db.execute("CREATE TABLE watchlist (chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, "
                             "PRIMARY KEY (chat_id, symbol))")
+            self.db.commit()
+        # notes PK cu (chat_id,symbol,ts) cho phep 1 ma bi note trung nhieu lan -> dedup ve PK (chat_id,symbol)
+        ninfo = self.db.execute("PRAGMA table_info(notes)").fetchall()
+        if ninfo and any(c[1] == "ts" and c[5] > 0 for c in ninfo):  # c[5]=pk: ts con trong PK -> schema cu
+            self.db.execute("ALTER TABLE notes RENAME TO notes_old")
+            self.db.execute("CREATE TABLE notes (chat_id INTEGER NOT NULL, symbol TEXT NOT NULL, "
+                            "ts TEXT NOT NULL, price REAL, reported INTEGER DEFAULT 0, "
+                            "PRIMARY KEY (chat_id, symbol))")
+            self.db.execute("INSERT OR IGNORE INTO notes SELECT chat_id, symbol, ts, price, reported "
+                            "FROM notes_old ORDER BY ts")  # giu note dau tien moi (chat, ma)
+            self.db.execute("DROP TABLE notes_old")
             self.db.commit()
 
     def insert_snapshots(self, ts, rows):
@@ -295,7 +306,8 @@ class SqliteRepo(SnapshotRepo):
         return r[0] if r else None
 
     def add_note(self, chat_id, symbol, ts, price):
-        self.db.execute("INSERT OR REPLACE INTO notes (chat_id, symbol, ts, price) VALUES (?,?,?,?)",
+        # OR IGNORE: bam lai cung ma -> giu note dau (khong trung, khong reset ngay theo doi)
+        self.db.execute("INSERT OR IGNORE INTO notes (chat_id, symbol, ts, price) VALUES (?,?,?,?)",
                         (chat_id, symbol, ts, price))
         self.db.commit()
 
