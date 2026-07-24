@@ -11,6 +11,10 @@ def run():
     assert classify_regime(-20e9, -0.5e9, 1.0, **TH) == "XA_CHUNG"
     assert classify_regime(5e9, 5e9, 1.0, **TH) == "NEUTRAL"
     assert classify_regime(8e9, 5e9, 0.5, **TH) == "GOM"      # watchlist: nguong /2
+    # bible §2: exit_th thap hon -> XA fire som hon (thoat nhay); mac dinh doi xung
+    assert classify_regime(-12e9, -5e9, 1.0, day_net_th=15e9, rate_th=1e9, exit_th=10e9) == "XA"     # -12 <= -10
+    assert classify_regime(-12e9, -5e9, 1.0, **TH) == "NEUTRAL"                                       # exit_th mac dinh 15 -> chua toi
+    assert classify_regime(-12e9, -0.5e9, 1.0, day_net_th=15e9, rate_th=1e9, exit_th=10e9) == "XA_CHUNG"
 
     # spike (tu selftest cu): 5 ty / win 20 ty = share 25% -> spike
     SP = dict(min_day_value=30e9, min_net=3e9, min_share=0.15)
@@ -19,6 +23,11 @@ def run():
     assert spike_share(5e9, 40e9, 120e9, 1.0, **SP) is None    # share < 15%
     assert spike_share(5e9, 20e9, 20e9, 1.0, **SP) is None     # GTGD ngay < 30 ty
     assert spike_share(5e9, 0, 120e9, 1.0, **SP) is None       # win_value <= 0
+    # bible §5.2: gate day-share — net phai dang ke so voi GTGD NGAY, khong chi ap dao 1 window mong
+    SP2 = dict(min_day_value=30e9, min_net=3e9, min_share=0.15, min_day_share=0.05)
+    assert spike_share(4.2e9, 8e9, 100e9, 1.0, **SP2) is None          # 4.2/100=4.2% < 5% day-share (ca FRT) du share window 52%
+    assert abs(spike_share(6e9, 12e9, 100e9, 1.0, **SP2) - 0.5) < 1e-9  # 6/100=6% >= 5% -> qua
+    assert spike_share(4.2e9, 8e9, 100e9, 0.5, **SP2) is not None       # watchlist: gate *0.5=2.5% -> qua
 
     # accel (tu selftest cu): 1.2 -> 2.7 -> 5.0 tang dan, share 25% -> True
     AC = dict(min_day_value=30e9, min_last=1.5e9, min_share=0.10)

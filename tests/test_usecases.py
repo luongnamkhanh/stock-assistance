@@ -36,10 +36,11 @@ def run():
     snap(r8, f"{day}T13:05:00+07:00", "GGG", 20.1e9)
     assert detect_states(r8, F, f"{day}T13:05:00+07:00", set()) == [], "gap nghi trua -> skip"
 
-    snap(r, f"{day}T10:10:00+07:00", "AAA", 25.2e9, dv=120e9)
+    snap(r, f"{day}T10:10:00+07:00", "AAA", 26.5e9, dv=120e9)   # net 6.5 / GTGD ngay 120 = 5.4% >= gate 5% (bible §5.2)
     msgs = detect_spikes(r, F, f"{day}T10:10:00+07:00", set())
     assert len(msgs) == 1 and "AAA" in msgs[0][1] and "mua ròng" in msgs[0][1], msgs
     assert "thỏa thuận" not in msgs[0][1] and msgs[0][2] is False
+    assert msgs[0][3] is False, "spike le, offline khong xac nhan setup da phien -> khong loud (bible §4)"
     assert detect_spikes(r, F, f"{day}T10:10:00+07:00", set()) == [], "cooldown"
 
     # wl_only: chi qua nguong NHO watchlist -> flag True; khong watch thi khong co alert nao
@@ -72,6 +73,29 @@ def run():
     snap(r9, f"{day}T10:10:00+07:00", "TT1", 10e9, dv=110e9)   # net 9 ty / win_value 10 ty = 90% share
     out = detect_spikes(r9, F, f"{day}T10:10:00+07:00", set())
     assert len(out) == 1 and out[0][3] is True and "thỏa thuận" in out[0][1], out
+
+    # bible §2/§6: XA (diem thoat) -> loud du khong quy nao nam; va exit_th=10 nhay hon (day_net -13 < -10 nhung > -15)
+    rx = SqliteRepo(":memory:")
+    snap(rx, f"{day}T09:30:00+07:00", "XXX", 0, sell=6e9)
+    snap(rx, f"{day}T10:00:00+07:00", "XXX", 0, sell=13e9)   # day_net -13e9, 30' qua -7e9
+    mx = detect_states(rx, F, f"{day}T10:00:00+07:00", set())
+    assert len(mx) == 1 and "XẢ" in mx[0][1] and mx[0][3] is True, mx   # XA -> loud (thoat keu ngang vao)
+
+    # bible §4/§5.4: trend_side = chieu chuoi phien lien tiep (>=2) -> "setup da phien" cho _continues
+    from src.domain.entities import DayFlow
+    from src.usecases.build_trend import _daily_cache, trend_side
+    class BuyFlows:                       # 2 phien mua lien tiep cuoi -> lean "mua"
+        def foreign_daily(self, code, n=10):
+            return [DayFlow("2026-01-01", -1e9), DayFlow("2026-01-02", 5e9), DayFlow("2026-01-03", 6e9)]
+    class ChopFlows:                      # dao lien tuc -> streak 1 -> None
+        def foreign_daily(self, code, n=10):
+            return [DayFlow("2026-01-01", 5e9), DayFlow("2026-01-02", -3e9), DayFlow("2026-01-03", 4e9)]
+    _daily_cache.clear()
+    assert trend_side("ZZ1", r, BuyFlows()) == "mua"
+    _daily_cache.clear()
+    assert trend_side("ZZ2", r, ChopFlows()) is None
+    _daily_cache.clear()
+    assert trend_side("ZZ3", r, NoFlows()) is None      # API loi -> None, khong chan
 
     # nhip tim dau phien: 1 lan/ngay, chi trong cua so 09:15-10:00, can snapshot hom nay
     class Tg:

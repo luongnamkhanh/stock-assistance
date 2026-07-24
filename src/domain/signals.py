@@ -4,16 +4,21 @@ import statistics
 from .entities import TrendStats
 
 
-def classify_regime(day_net, recent, factor, day_net_th, rate_th):
+def classify_regime(day_net, recent, factor, day_net_th, rate_th, exit_th=None):
+    """exit_th (bible §2): nguong XA rieng, thap hon day_net_th -> thoat nhay hon vao. None -> doi xung."""
+    exit_th = day_net_th if exit_th is None else exit_th
     if day_net >= day_net_th * factor:
         return "GOM" if recent > rate_th * factor else "GOM_CHUNG"
-    if day_net <= -day_net_th * factor:
+    if day_net <= -exit_th * factor:
         return "XA" if recent < -rate_th * factor else "XA_CHUNG"
     return "NEUTRAL"
 
 
-def spike_share(net, win_value, day_value, factor, min_day_value, min_net, min_share):
-    if day_value < min_day_value * factor or abs(net) < min_net * factor or win_value <= 0:
+def spike_share(net, win_value, day_value, factor, min_day_value, min_net, min_share, min_day_share=0.0):
+    """min_day_share (bible §5.2): net phai >= min_day_share * GTGD ngay -> 'dang ke so voi chinh ma',
+    khong chi ap dao 1 window mong. min_day_share=0 -> tat gate (default an toan)."""
+    if (day_value < min_day_value * factor or abs(net) < min_net * factor
+            or abs(net) < min_day_share * day_value * factor or win_value <= 0):
         return None
     share = abs(net) / win_value
     return share if share >= min_share else None

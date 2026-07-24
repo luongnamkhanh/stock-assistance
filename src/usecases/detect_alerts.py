@@ -4,13 +4,14 @@ from datetime import datetime
 
 from src.adapters import presenters
 from src.config import (ACCEL_MIN_LAST, ACCEL_MIN_SHARE, ALERT_MIN_NET, ALERT_MIN_SHARE,
-                        COOLDOWN_MINUTES, DAY_NET_TH, FLOOR_LOCK_SHARE, FLOOR_PCT,
+                        COOLDOWN_MINUTES, DAY_NET_TH, DAY_NET_TH_EXIT, FLOOR_LOCK_SHARE, FLOOR_PCT,
                         FORCESELL_MIN_GTGD, FORCESELL_MIN_STOCKS, FUND_CONFLUENCE_MIN,
-                        MIN_DAY_VALUE, RATE_TH, STALL_MINUTES, WINDOW_MINUTES, WL_FACTOR)
+                        MIN_DAY_VALUE, RATE_TH, SPIKE_MIN_DAY_SHARE, STALL_MINUTES, WINDOW_MINUTES,
+                        WL_FACTOR)
 from src.domain import signals
 from src.domain.entities import Accel, RegimeChange, Spike
 from src.usecases import margin
-from src.usecases.build_trend import trend_ctx
+from src.usecases.build_trend import trend_ctx, trend_side
 from src.usecases.feed_health import feed_ok
 from src.usecases.funds import holders_of
 from src.usecases.poll_market import poll
@@ -24,6 +25,13 @@ def _confluence(sym, buy_side, repo):
     return buy_side and holders_of(repo, sym) >= FUND_CONFLUENCE_MIN
 
 
+def _continues(sym, buy_side, repo, flows):
+    """Bible §4/§5.4: spike chi 'noi tiep setup da phien' khi cung chieu chuoi phien lien tiep
+    cua ma -> moi du len loud. Spike le / nguoc trend da phien = mam, giu im lang (T+2: khong
+    hanh dong duoc theo 1 nhip intraday roi rac)."""
+    return trend_side(sym, repo, flows) == ("mua" if buy_side else "bán")
+
+
 def detect_spikes(repo, flows, ts, wl):
     """-> [(sym, msg, wl_only, loud)] — wl_only: chi qua nguong nho watchlist, giao rieng chat watch;
     loud: dang keu chuong (thoa thuan share>80% hoac hop luu gom+quy)."""
@@ -33,15 +41,20 @@ def detect_spikes(repo, flows, ts, wl):
     alerts, msgs = [], []
     for sym, net, win_value, day_value, price, pct, day_net in repo.spike_rows(ts, prev_ts):
         f = WL_FACTOR if sym in wl else 1.0
-        share = signals.spike_share(net, win_value, day_value, f, MIN_DAY_VALUE, ALERT_MIN_NET, ALERT_MIN_SHARE)
+        share = signals.spike_share(net, win_value, day_value, f, MIN_DAY_VALUE, ALERT_MIN_NET,
+                                    ALERT_MIN_SHARE, SPIKE_MIN_DAY_SHARE)
         if share is None:
             continue
         direction = "BUY" if net > 0 else "SELL"
         if repo.recent_alert(sym, direction, ts, COOLDOWN_MINUTES):
             continue
         wl_only = f != 1.0 and signals.spike_share(
-            net, win_value, day_value, 1.0, MIN_DAY_VALUE, ALERT_MIN_NET, ALERT_MIN_SHARE) is None
-        loud = share > SPIKE_LOUD_SHARE or _confluence(sym, net > 0, repo)
+            net, win_value, day_value, 1.0, MIN_DAY_VALUE, ALERT_MIN_NET, ALERT_MIN_SHARE,
+            SPIKE_MIN_DAY_SHARE) is None
+        # bible §4/§6: spike la mam -> loud khi la thoa thuan (share cao, 1 su kien) HOAC noi tiep
+        # setup da phien + hop luu quy; spike le nguoc trend giu im lang du qua nguong
+        loud = share > SPIKE_LOUD_SHARE or (_continues(sym, net > 0, repo, flows)
+                                            and _confluence(sym, net > 0, repo))
         alerts.append((ts, sym, direction, net, share, price))
         msgs.append((sym, presenters.spike_msg(Spike(sym, net, share, price, pct or 0, day_net))
                      + trend_ctx(sym, repo, flows), wl_only, loud))
@@ -64,14 +77,16 @@ def detect_states(repo, flows, ts, wl):
         f = WL_FACTOR if in_wl else 1.0
         if not in_wl and day_value < MIN_DAY_VALUE:
             continue
-        regime = signals.classify_regime(day_net, recent, f, DAY_NET_TH, RATE_TH)
+        regime = signals.classify_regime(day_net, recent, f, DAY_NET_TH, RATE_TH, DAY_NET_TH_EXIT)
         old = repo.get_regime(sym, day)
         if regime == old:
             continue
         repo.set_regime(sym, regime, day)  # state luu chung theo nguong wl — chat khong watch co the
         if regime != "NEUTRAL":            # bo lo 1 transition nguong-thap (chap nhan, hiem)
-            wl_only = f != 1.0 and signals.classify_regime(day_net, recent, 1.0, DAY_NET_TH, RATE_TH) != regime
-            loud = _confluence(sym, regime.startswith("GOM"), repo)  # gom + nhieu quy -> keu; xa thuong -> im
+            wl_only = f != 1.0 and signals.classify_regime(
+                day_net, recent, 1.0, DAY_NET_TH, RATE_TH, DAY_NET_TH_EXIT) != regime
+            # bible §2/§6: XA (diem thoat) keu chuong NGANG GOM+hop_luu — thoat tre dau hon vao hut
+            loud = regime == "XA" or _confluence(sym, regime.startswith("GOM"), repo)
             msgs.append((sym, presenters.state_msg(RegimeChange(sym, regime, recent, day_net, price or 0, pct or 0))
                          + trend_ctx(sym, repo, flows), wl_only, loud))
     return msgs

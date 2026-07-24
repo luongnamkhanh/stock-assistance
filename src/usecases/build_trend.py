@@ -3,24 +3,39 @@
 from src.adapters import presenters
 from src.config import MOVERS_MIN_NET, now_vn
 from src.domain.entities import DayFlow
+from src.domain.signals import trend_stats
 
-_ctx_cache = {}   # sym -> ctx cua _ctx_day: phien da chot + story hom truoc khong doi trong ngay
+_ctx_cache = {}     # sym -> chuoi ctx cua _ctx_day (phien da chot + story khong doi trong ngay)
+_daily_cache = {}   # sym -> [DayFlow] phien DA CHOT (cache theo ngay, dung chung boi trend_ctx + trend_side)
 _ctx_day = None
+
+
+def _reset_if_new_day():
+    global _ctx_day
+    today = now_vn().date().isoformat()
+    if _ctx_day != today:
+        _ctx_day = today
+        _ctx_cache.clear()
+        _daily_cache.clear()
+    return today
+
+
+def _closed_daily(sym, flows, today):
+    """[DayFlow] cac phien DA CHOT (< today), cache theo ngay. Loi API -> raise (caller bat)."""
+    if sym not in _daily_cache:
+        _daily_cache[sym] = [f for f in flows.foreign_daily(sym, 6) if f.trading_date < today]
+    return _daily_cache[sym]
 
 
 def trend_ctx(sym, repo, flows):
     """Loi mang/API -> chuoi rong (khong cache), alert van gui binh thuong. Chi giu phien
     DA CHOT (hom nay da co dong 'Ca phien' trong alert roi). Kem dac tinh phien gan nhat
     tu day_story + hop luu quy mo (fund_line)."""
-    global _ctx_day
-    today = now_vn().date().isoformat()
-    if _ctx_day != today:
-        _ctx_day = today
-        _ctx_cache.clear()
+    today = _reset_if_new_day()
     if sym in _ctx_cache:
         return _ctx_cache[sym]
     try:
-        rows = [f for f in flows.foreign_daily(sym, 6) if f.trading_date < today]
+        rows = _closed_daily(sym, flows, today)
         out = presenters.trend_ctx_line(rows[-5:])
         row = repo.last_story(sym, today)
         if row:
@@ -30,6 +45,20 @@ def trend_ctx(sym, repo, flows):
         return out
     except Exception:
         return ""
+
+
+def trend_side(sym, repo, flows, min_streak=2):
+    """Bible §4/§5.4: chieu 'setup da phien' cua ma = chuoi phien lien tiep gan nhat.
+    -> 'mua'/'bán' neu streak >= min_streak (co lean da phien ro); None neu choppy / API loi
+    (spike le / nguoc trend da phien = mam, khong du de len tier loud)."""
+    try:
+        nets = [f.net_val for f in _closed_daily(sym, flows, _reset_if_new_day())]
+        if not nets:
+            return None
+        t = trend_stats(nets)
+        return t.streak_side if t.streak >= min_streak else None
+    except Exception:
+        return None
 
 
 def fund_ctx(sym, repo):

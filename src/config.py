@@ -9,10 +9,12 @@ ROOT = Path(__file__).resolve().parent.parent   # repo root — flows.db/telegra
 POLL_MINUTES = 5           # snapshot cadence
 WINDOW_MINUTES = 10        # spike window ("1 phien" cua user)
 MIN_DAY_VALUE = 30e9       # chi xet ma co GTGD ngay >= 30 ty VND (tru watchlist)
-ALERT_MIN_NET = 3e9        # spike: |net flow 10'| >= 3 ty VND
-ALERT_MIN_SHARE = 0.15     # spike: va >= 15% GTGD cua chinh window do
+ALERT_MIN_NET = 3e9        # spike: |net flow 10'| >= 3 ty VND (san tuyet doi, backstop)
+ALERT_MIN_SHARE = 0.15     # spike: va >= 15% GTGD cua chinh window do (ap dao NHIP)
+SPIKE_MIN_DAY_SHARE = 0.05  # spike (bible §5.2): va >= 5% GTGD NGAY cua ma -> "dang ke so voi chinh ma", loc cu dominate-window-yen-nhung-nhe-tien (ca FRT)  # ponytail: nguong tho, tune sau
 COOLDOWN_MINUTES = 30      # spike: khong bao lai cung ma cung chieu trong 30'
-DAY_NET_TH = 15e9          # state: |net rong tu dau phien| >= 15 ty => co trang thai
+DAY_NET_TH = 15e9          # state: |net rong tu dau phien| >= 15 ty => co trang thai (VAO)
+DAY_NET_TH_EXIT = 10e9     # state (bible §2): nguong XA thap hon GOM -> thoat nhay hon vao
 STALL_MINUTES = 30         # state: cua so do toc do gan nhat
 RATE_TH = 1e9              # state: |net 30'| < 1 ty => coi nhu chung lai
 WL_FACTOR = 0.5            # watchlist: nguong spike & state nhan he so nay
