@@ -350,14 +350,20 @@ def tts(text, path):
 
 
 def split_script(script):
-    """Tach script thanh (hook, than, ket); fallback: chia cau."""
+    """Tach script thanh (hook, than, ket). Fallback khi thieu tag: hook = CAU DAU
+    (dung '[HOOK] 1 cau'), khong gop cau sau vao hook — tranh hook_number chop nham so
+    o cau 2 (bug P2 tuan: 'gom MWG 279 ty' bi doc thanh net ban rong ca tuan). Tuoc hashtag truoc."""
     parts = re.split(r"\[(?:HOOK|THÂN|THAN|KẾT|KET)\]", script)
     parts = [p.strip() for p in parts[1:] if p.strip()]
     if len(parts) >= 3:
         return parts[0], parts[1], re.sub(r"#\S+", "", parts[2]).strip()
-    sents = re.split(r"(?<=[.!?]) ", script)
-    third = max(1, len(sents) // 3)
-    return " ".join(sents[:third]), " ".join(sents[third:-third] or sents[third:]), " ".join(sents[-third:])
+    body = re.sub(r"#\S+", "", script).strip()
+    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", body) if s.strip()]
+    if not sents:
+        return body, "", ""
+    if len(sents) <= 2:
+        return sents[0], " ".join(sents[1:]) or sents[0], ""
+    return sents[0], " ".join(sents[1:-1]), sents[-1]
 
 
 def hook_number(text, fallback):
@@ -635,6 +641,11 @@ def selftest():
 
     h, t, k = split_script("[HOOK] Bán ròng 29 tỷ.\n[THÂN] Nội dung chính.\n[KẾT] Follow nhé. #kn #vn")
     assert h == "Bán ròng 29 tỷ." and t == "Nội dung chính." and k == "Follow nhé."
+    # fallback khong tag (script tuan): hook = cau dau, KHONG nuot so cua cau 2 (bug P2)
+    h, t, k = split_script("Quỹ mở hợp lưu giữa áp lực bán ròng. Khối ngoại gom MWG 279 tỷ. "
+                           "HPG dẫn đầu 27 quỹ. Follow nhé. #a #b")
+    assert h == "Quỹ mở hợp lưu giữa áp lực bán ròng." and "279 tỷ" in t and "#" not in k, (h, t, k)
+    assert hook_number(h, -3736) == -3736, "hook khong co 'ty' -> giu net tuan, khong chop 279"
 
     segs = plan_scenes("Hôm nay bán ròng 29 tỷ.",
                        "Đây là phiên bán ròng thứ tư liên tiếp. Sắc xanh vẫn áp đảo bảng điện. "
