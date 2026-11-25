@@ -1,8 +1,31 @@
 """Tin nhan theo vong doi phien: nhip tim mo cua (09:15+) va tong ket dong cua (15:10+)."""
+from urllib.error import HTTPError
+
 from src.adapters import chart, presenters
 from src.config import LATE_SESSION_START, now_vn
 from src.usecases.build_trend import market_snapshot, trend_message
 from src.usecases.make_script import make_script
+
+
+def _send_daily(repo, tg, text, key, today):
+    if not (tg.cfg.get("token") and tg.cfg.get("chat_ids")):
+        return False
+    complete = True
+    for cid in tg.cfg["chat_ids"]:
+        chat_key = f"{key}:{cid}"
+        if repo.get_meta(chat_key) == today:
+            continue
+        try:
+            tg.send_to(cid, text)
+        except Exception as e:
+            print(f"[{now_vn().isoformat(timespec='seconds')}] {key} failed ({cid}): {e}")
+            if not isinstance(e, HTTPError) or e.code != 403:
+                complete = False
+                continue
+        repo.set_meta(chat_key, today)  # 403 la tu choi: khong thu lai chat nay trong ngay
+    if complete:
+        repo.set_meta(key, today)
+    return complete
 
 
 def maybe_send_open(repo, tg, now=None):
@@ -22,8 +45,7 @@ def maybe_send_open(repo, tg, now=None):
     text = presenters.open_msg(ts, repo.market_net(ts), sum(p > 0 for _, p in heat),
                                len(heat), repo.snapshot_count(ts))
     try:
-        tg.broadcast(text)
-        repo.set_meta("open_day", today)  # chi danh dau khi gui thanh cong — loi thi 25s sau thu lai
+        _send_daily(repo, tg, text, "open_day", today)
     except Exception as e:
         print(f"[{now.isoformat(timespec='seconds')}] open msg failed: {e}")
 
@@ -40,8 +62,8 @@ def maybe_send_summary(repo, flows, llm, tg):
     try:
         repo.save_day_story(today, LATE_SESSION_START)  # chot dac tinh phien de lam giau alert cac ngay sau
         text = "🔔 Tổng kết phiên\n\n" + trend_message("VNINDEX", repo, flows, movers=True)
-        tg.broadcast(text)
-        repo.set_meta("summary_day", today)
+        if not _send_daily(repo, tg, text, "summary_day", today):
+            return
     except Exception as e:
         print(f"[{now.isoformat(timespec='seconds')}] summary failed: {e}")
         return

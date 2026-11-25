@@ -101,7 +101,7 @@ def run():
     class Tg:
         sent = []
         cfg = {"token": "t", "chat_ids": [7]}
-        def broadcast(self, text):
+        def send_to(self, cid, text):
             self.sent.append(text)
     r4, tg = SqliteRepo(":memory:"), Tg()
     at = lambda h, m: datetime(2026, 1, 5, h, m, tzinfo=VN_TZ)  # thu 2
